@@ -4,6 +4,7 @@ import os
 from dotenv import load_dotenv
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
+import ast
 
 load_dotenv()
 
@@ -16,26 +17,35 @@ llm = ChatOpenAI(
 
 # Prompt to generate a backtesting.py-compatible strategy
 strategy_prompt = PromptTemplate.from_template("""
-You are a highly skilled and compeptive quantitative trading developer with a strong background in algorithmic trading and machine learning.
-                                               
+You are a highly skilled and competitive quantitative trading developer with a strong background in algorithmic trading and machine learning.
 
+Your task is to create a **profitable intraday trading strategy** for the U.S. stock {ticker}, using 5-minute OHLCV data from the past 5 trading days.
 
-Create a **profitable intraday trading strategy** for the U.S. stock {ticker}, using the provided csv of OHLCV data.
+You should first analyze the price action and identify exploitable short-term patterns (e.g., mean reversion, momentum, volatility breakouts).
 
-First, analyze the data and identify potential patterns or trends that could be exploited for profit.
-
-                                               
 Instructions:
-1. Write a short explanation of your trading logic and rationale.
-2. Then provide a full Python class that inherits from `backtesting.Strategy`, using:
-   - `init(self)` for indicator setup
-   - `next(self)` for trade logic
+1. Write a brief description of your trading logic and rationale.
+2. Then write a full Python class that inherits from `backtesting.Strategy`, including:
+   - `init(self)` to define and initialize indicators
+   - `next(self)` to define trading logic and execution rules
+
+⚠️ Do **not** use `.rolling()`, `.shift()`, or `pd.Series(...)` on `self.data.Close`. These operations will cause runtime errors.
+
+✅ Instead, define all indicators using `self.I(...)`, for example:
+```python
+self.sma = self.I(SMA, self.data.Close, 20)
+self.std = self.I(lambda x: pd.Series(x).rolling(20).std(), self.data.Close)
+self.rsi = self.I(lambda x: 100 - (100 / (1 + x.pct_change().rolling(14).mean() / abs(x.pct_change().rolling(14).mean()))), self.data.Close)
+
 
 Assume these imports are already provided:
 ```python
 from backtesting import Strategy
 from backtesting.lib import crossover
 from backtesting.test import SMA
+import pandas as pd
+import numpy as np
+                                               
 Return only:
 A description of the strategy and the correspondingPython code inside a python ... block """)
 
@@ -60,9 +70,12 @@ def generate_strategy(df, user_prompt="Come up with a profitable strategy on SPY
             description = parts[0].strip()
             code_block = next((part for part in parts if "class" in part), "# No valid strategy code returned")
             code = code_block.replace("python", "").strip()
+            code = ast.literal_eval(f"'''{code}'''")
         else:
             description = text.strip()
             code = "# No code block returned by LLM."
+        description = ast.literal_eval(f"'''{description
+        }'''")
         print(f"[INFO] Strategy built!")
         return code, description
 

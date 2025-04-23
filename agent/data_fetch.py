@@ -2,16 +2,7 @@ import yfinance as yf
 import pandas as pd
 import os
 
-def fetch_intraday_data(name: str="SPY", interval: str='5m', period: str='5d', use_cache: bool=True) -> pd.DataFrame:
-    """
-    Intervals available via yfinance: '1m', '2m', '5m', '15m', '30m', '60m', '90m'
-
-    Period limit for 1-min data is usually 7 days
-
-    5-min allows for up to 60 days, but Yahoo may cap it to 30 in practice
-
-    Market is only open from 9:30 AM to 4:00 PM ET — make sure to trim if needed later
-    """
+def fetch_intraday_data(name: str = "SPY", interval: str = '5m', period: str = '5d', use_cache: bool = True) -> pd.DataFrame:
     cache_dir = "data"
     os.makedirs(cache_dir, exist_ok=True)
     cache_filename = f"{name}_{interval}_{period}.csv"
@@ -22,33 +13,34 @@ def fetch_intraday_data(name: str="SPY", interval: str='5m', period: str='5d', u
         try:
             print(f"[INFO] Loading cached data from {cache_path}")
             df = pd.read_csv(cache_path, parse_dates=["Datetime"])
-            print(f"[INFO] Data fetched!")
-            return df
         except Exception as e:
-            print(f"[WARNING] Failed to read cache file, refetching: {e}")
-    
-    try:
+            print(f"[WARNING] Cache loading failed: {e}, refetching...")
+            use_cache = False  # fallback to fresh fetch
+
+    if not use_cache:
         print(f"[INFO] Fetching YFinance data for {name} with interval={interval}, period={period}")
-        data = yf.download(
-            tickers=name,
-            interval=interval,
-            period=period,
-            progress=False
-        )
-
-        if data.empty:
+        df = yf.download(name, interval=interval, period=period, progress=False)
+        if df.empty:
             raise ValueError(f"No data returned for {name} with interval={interval}, period={period}")
+        df = df.reset_index()
+        df.to_csv(cache_path, index=False)
 
+    print("[INFO] Data fetched!")
 
-        data = data.reset_index()
+    # Clean: drop bad string headers like row 0 with TSLA strings
+    df = df[df["Close"] != "Close"]
 
-        if use_cache:
-            data.to_csv(cache_path, index=False)
-            print(f"[INFO] Data cached to {cache_path}")
-            
+    # Ensure column types are numeric
+    required_cols = ["Open", "High", "Low", "Close", "Volume"]
+    for col in required_cols:
+        if col in df.columns:
+            df[col] = pd.to_numeric(df[col], errors="coerce")
+        else:
+            raise ValueError(f"[ERROR] Missing column: {col}")
 
-        return data
+    # Drop rows with NaNs in required columns
+    df.dropna(subset=required_cols, inplace=True)
 
-    except Exception as e:
-        print(f"[ERROR] Failed to fetch data for {name}: {e}")
-        return pd.DataFrame()
+    # Final cleanup
+    df = df.reset_index(drop=True)
+    return df
