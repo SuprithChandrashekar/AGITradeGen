@@ -39,11 +39,8 @@ def generate_vix_fade_signals(df=None, vix_window=252, high_percentile=0.90,
     if df is None or not all(col in df.columns for col in ['SPY', 'VIX']):
         df = fetch_vix_spy_data()
         if len(df) == 0:
+            print("No data available for the given date range.")
             return 0, None, None, None
-    
-    # Validate data
-    if len(df) < vix_window:
-        return 0, None, None, None
     
     # Calculate indicators
     df = df.copy()
@@ -80,5 +77,8 @@ def generate_vix_fade_signals(df=None, vix_window=252, high_percentile=0.90,
                 entry = float(last_entry['SPY'])
                 sl = max(entry * 0.99, float(today['SPY']) * (1 - stop_loss_pct))
                 exit_px = entry * (1 + 0.005 * days_held)
+                
+    print(f"Today's VIX: {today['VIX']}, SPY: {today['SPY']}")
+    print(f"Yesterday's VIX: {yesterday['VIX']}, SPY: {yesterday['SPY']}")
     print(f"Signal: {signal}, Entry: {entry}, Exit: {exit_px}, SL: {sl}")         
     return signal, entry, exit_px, sl

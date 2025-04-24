@@ -31,4 +31,4 @@ if today_signal == 1:
 else:
     print(f"No actionable signal today. Entry: {entry_price}, Exit: {exit_price}, SL: {stop_loss}")
 
-broker.disconnect()
+#broker.disconnect()
