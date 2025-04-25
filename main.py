@@ -1,5 +1,5 @@
 from agent.data_fetch import fetch_intraday_data
-from agent.strategy import generate_strategy
+from agent.strategy import generate_strategy, generate_and_validate_strategy
 from agent.eval import backtest_strategy
 
 import pandas as pd
@@ -8,8 +8,8 @@ import numpy as np
 
 data = fetch_intraday_data("TSLA", "5m", "5d", True)
 
-code, strat = generate_strategy(data, "Come up with a profitable strategy on TSLA")
+df = fetch_intraday_data("TSLA", "5m", "5d", use_cache=True)
+code, description = generate_and_validate_strategy(df)
 
-results = backtest_strategy(data, code)   
-print(code)
-print(results)
+print("\n[STRATEGY DESCRIPTION]\n", description)
+print("\n[STRATEGY CODE]\n", code)
