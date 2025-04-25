@@ -13,3 +13,6 @@ jupyter
 seaborn
 plotly
 openpyxl
+zoneinfo
+google.adk.agents
+litellm
