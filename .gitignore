@@ -1,0 +1,2 @@
+# Ignore environment variable files
+agents/multi_tool_agent/.env
