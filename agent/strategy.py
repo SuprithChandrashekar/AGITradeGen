@@ -28,7 +28,7 @@ llm = ChatOpenAI(
 strategy_prompt = PromptTemplate.from_template("""
 You are a quantitative trading developer.
 
-Your task is to create a profitable intraday trading strategy for the U.S. stock {ticker}, using 5-minute OHLCV data over the past 5 trading days.
+Your task is to create a profitable intraday trading strategy for the U.S. stock {ticker}, using provided OHLCV data.
 
 You will be given a Pandas DataFrame called `df` containing these columns:
 - 'Datetime'
@@ -38,12 +38,19 @@ Your goal is to analyze the data and populate a new column `signal` such that:
 - `1` means "Buy"
 - `0` means "Hold"
 - `-1` means "Sell"
+                                               
+Before doing this, you must carefully analyze the given DataFrame create a strategy that is profitable and robust.              
 
 The strategy must be executable and deterministic using only Pandas/Numpy.
 
 You must return:
 1. A brief explanation of your strategy
-2. A Python code block (```python) that modifies the DataFrame in-place to add the `signal` column.""")
+2. A function named `add_signal(df)` in a Python code block (```python) that modifies the DataFrame in-place to add the `signal` column.
+                                               
+IMPORTANT:
+Ensure that any Series assigned to `df["signal"]` uses the same index as `df`. Example:
+```python
+df["signal"] = pd.Series(logic_array, index=df.index)""")
 
 
 chain = strategy_prompt | llm
@@ -97,3 +104,65 @@ def execute_strategy(df: pd.DataFrame, code: str) -> pd.DataFrame:
     except Exception as e:
         print(f"[ERROR] Failed to execute strategy code: {e}")
         raise
+
+improvement_prompt = PromptTemplate.from_template("""
+You are a quantitative trading strategist.
+
+You are given:
+- A Python strategy function that modifies a DataFrame to add a 'signal' column for trading (1=buy, 0=hold, -1=sell).
+- A backtest performance summary of this strategy.
+- You may assume the OHLCV data used is 5-minute bars for {ticker} over the last 5 trading days.
+
+{input}                     
+
+Your task:
+1. Analyze the weaknesses in the strategy and explain what could be improved.
+2. Then return a revised version of the Python strategy that:
+   - Still adds a 'signal' column to the DataFrame.
+   - Uses only numpy/pandas logic.
+   - Avoids complex external dependencies or stateful classes.
+   - Focuses on making the strategy more profitable, less volatile, or smarter.
+                                                  
+The strategy must be executable and deterministic using only Pandas/Numpy.
+                                                  
+The strategy must be executable and deterministic using only Pandas/Numpy.
+
+You must return:
+1. A brief explanation of your strategy
+2. A function named `add_signal(df)` in a Python code block (```python) that modifies the DataFrame in-place to add the `signal` column.
+                                               
+IMPORTANT:
+Ensure that any Series assigned to `df["signal"]` uses the same index as `df`. Example:
+```python
+df["signal"] = pd.Series(logic_array, index=df.index)""")
+
+def improve_strategy(df, code: str, results_str: str, ticker="TSLA"):
+    try:
+        # Combine strategy code and backtest result
+        prompt_input = {
+            "ticker": ticker,
+            "code": code,
+            "results": results_str
+        }
+        full_input = (
+            f"STRATEGY CODE:\n```python\n{code}\n```\n\n"
+            f"BACKTEST RESULTS:\n{results_str}"
+        )
+        chain = improvement_prompt | llm
+        response = chain.invoke({"ticker": ticker, "input": full_input})
+        text = response["text"] if isinstance(response, dict) else str(response)
+
+        if "```" in text:
+            parts = text.split("```")
+            explanation = parts[0].strip()
+            code_block = next((p for p in parts if "def" in p or "df[" in p), "")
+            improved_code = code_block.replace("python", "").strip()
+            explanation = ast.literal_eval(f"'''{explanation}'''")
+            improved_code = ast.literal_eval(f"'''{improved_code}'''")
+            return improved_code, explanation
+        else:
+            return "# No improved code returned", text.strip()
+
+    except Exception as e:
+        print(f"[ERROR] Strategy improvement failed: {e}")
+        return "# Error", "Improvement generation failed."
