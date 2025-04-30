@@ -6,58 +6,73 @@ from backtesting.lib import crossover
 from backtesting.test import SMA
 from statistics import stdev as StdDev  # or define a rolling one
 import traceback
+import matplotlib.pyplot as plt
 
 
-def backtest_strategy(df, strategy_code: str):
-    try:
-        # Prepare local namespace and exec strategy code
-        local_env = {}
-        exec(strategy_code, globals(), local_env)
+def backtest_strategy(df, capital=10000, fee_per_trade=0.001, verbose=True):
+    """
+    Vectorized backtest based on a DataFrame with a 'signal' column: 1 (buy), -1 (sell), 0 (hold).
+    Assumes trades happen at the next bar's open price.
+    
+    Returns a summary dictionary.
+    """
+    df = df.copy()
+    if 'signal' not in df.columns:
+        raise ValueError("DataFrame must contain a 'signal' column with values -1, 0, 1")
 
-        # Find the Strategy subclass
-        strategy_class = None
-        for obj in local_env.values():
-            if isinstance(obj, type) and issubclass(obj, Strategy) and obj is not Strategy:
-                strategy_class = obj
-                break
+    # Shift signal so trade occurs on the next bar
+    df['position'] = df['signal'].shift().fillna(0)
 
-        if strategy_class is None:
-            raise ValueError("No valid Strategy subclass found in generated code.")
+    # Calculate returns
+    df['return'] = df['Close'].pct_change().fillna(0)
+    df['strategy_return'] = df['position'] * df['return']
 
-        # Prepare DataFrame: make sure it has proper OHLCV columns
-        bt_df = df.copy()
-        required_cols = {"Open", "High", "Low", "Close", "Volume"}
-        if not required_cols.issubset(bt_df.columns):
-            raise ValueError("Input DataFrame missing required OHLCV columns.")
+    # Calculate cumulative returns
+    df['cumulative_market'] = (1 + df['return']).cumprod()
+    df['cumulative_strategy'] = (1 + df['strategy_return']).cumprod()
 
-        # Drop rows with NaNs (indicators might produce some)
-        bt_df.dropna(inplace=True)
+    # Simulate capital
+    df['capital'] = capital * df['cumulative_strategy']
 
-        # Run the backtest
-        bt = Backtest(bt_df, strategy_class, cash=10_000, commission=0.001, exclusive_orders=True)
-        stats = bt.run()
-        bt.plot()  # comment this out if running headless or non-GUI
+    # Count trades
+    df['trade'] = df['position'].diff().fillna(0).abs()
+    total_trades = df['trade'].sum()
 
-        return {
-            "Cumulative Return": stats["Equity Final [$]"] / stats["Equity Start [$]"] - 1,
-            "Sharpe Ratio": stats["Sharpe Ratio"],
-            "Max Drawdown": stats["Max Drawdown [%]"],
-            "Win Rate": stats["Win Rate [%]"],
-            "Trades": stats["# Trades"],
-            "Raw Stats": stats 
-        }
+    # Apply trading fees
+    total_fees = total_trades * fee_per_trade * capital
+    final_value = df['capital'].iloc[-1] - total_fees
 
-    except Exception as e:
-        print("[ERROR] Backtest failed:")
-        traceback.print_exc()
-        return {
-            "error": str(e),
-            "traceback": traceback.format_exc()
-        }
+    # Generate summary
+    results = {
+        "Initial Capital": capital,
+        "Final Capital": round(final_value, 2),
+        "Total Return (%)": round((final_value / capital - 1) * 100, 2),
+        "Sharpe Ratio": round(df['strategy_return'].mean() / df['strategy_return'].std() * np.sqrt(252 * 78), 2),  # 78 5-min bars/day
+        "Max Drawdown (%)": round(100 * ((df['capital'].cummax() - df['capital']) / df['capital'].cummax()).max(), 2),
+        "Total Trades": int(total_trades),
+        "Fee Cost": round(total_fees, 2),
+    }
 
-def generate_report(results: dict, strategy_description: str):
-    print("\n--- STRATEGY REPORT ---")
-    print("Description:", strategy_description)
-    print("Cumulative Return:", round(results["cumulative_return"], 4))
-    print("Sharpe Ratio:", round(results["sharpe"], 4))
-    print("------------------------")
+    summary_lines = ["📊 [BACKTEST RESULTS]", "-" * 35]
+    for k, v in results.items():
+        if isinstance(v, (float, int, np.integer, np.floating)):
+            summary_lines.append(f"{k:<20}: {v:,.2f}")
+        else:
+            summary_lines.append(f"{k:<20}: {v}")
+    summary_lines.append("-" * 35)
+
+    results_str = "\n".join(summary_lines)
+    return results_str, results, df
+
+
+def plot_backtest(df):
+    plt.figure(figsize=(12, 6))
+    plt.plot(df['Datetime'], df['cumulative_market'], label='Market Return')
+    plt.plot(df['Datetime'], df['cumulative_strategy'], label='Strategy Return')
+    plt.legend()
+    plt.title("Backtest Performance")
+    plt.xlabel("Datetime")
+    plt.ylabel("Cumulative Return")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()

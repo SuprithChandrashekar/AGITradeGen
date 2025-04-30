@@ -3,7 +3,7 @@ import pandas as pd
 import os
 from datetime import datetime, timedelta
 
-
+"""
 def fetch_intraday_data(name: str = "SPY", interval: str = '5m', start: str = None, end: str = None, use_cache: bool = True) -> pd.DataFrame:
     cache_dir = "data"
     os.makedirs(cache_dir, exist_ok=True)
@@ -141,4 +141,3 @@ def fetch_intraday_data(name: str = "SPY", interval: str = '5m', period: str = '
     # Final cleanup
     df = df.reset_index(drop=True)
     return df
-"""
