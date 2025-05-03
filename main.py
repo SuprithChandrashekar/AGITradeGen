@@ -7,7 +7,6 @@ import numpy as np
 
 
 data = fetch_intraday_data("TSLA", "5m", "5d", True)
-
 df = fetch_intraday_data("TSLA", "5m", "5d", use_cache=True)
 code, description = generate_strategy(df)
 df1 = execute_strategy(df, code)
@@ -15,6 +14,7 @@ results_str, results, df1 = backtest_strategy(df1, capital=10000, fee_per_trade=
 second_code, second_description = improve_strategy(df1, code, results_str, ticker="TSLA")
 df2 = execute_strategy(df, second_code)
 results_str2, results2, df2 = backtest_strategy(df2, capital=10000, fee_per_trade=0.001, verbose=True)
+plot_backtest(df2)
 
 
 print("\n[STRATEGY DESCRIPTION]\n", description)
@@ -23,3 +23,4 @@ print("\n[BACKTEST RESULTS]\n", results_str)
 print("\n[IMPROVED STRATEGY DESCRIPTION]\n", second_description)
 print("\n[IMPROVED STRATEGY CODE]\n", second_code)
 print("\n[IMPROVED BACKTEST RESULTS]\n", results_str2)
+print(df2.head())
