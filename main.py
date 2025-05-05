@@ -5,8 +5,17 @@ from agent.eval import backtest_strategy, plot_backtest
 import pandas as pd
 import numpy as np
 
+"""
+ - Create agent loop, prompt the user and then execute all of this based of prompt
+ - Data fetch/cache
+ - Error handling from generated
+ - Testing/Continue prompt engineering
+ - Backtesting is currently on same exact set of data it initially fetched (train/test split)
+ - Potentially add new agent to externally judge and improve the strategy
+"""
 
-data = fetch_intraday_data("TSLA", "5m", "5d", True)
+
+
 df = fetch_intraday_data("TSLA", "5m", "5d", use_cache=True)
 code, description = generate_strategy(df)
 df1 = execute_strategy(df, code)
@@ -14,7 +23,7 @@ results_str, results, df1 = backtest_strategy(df1, capital=10000, fee_per_trade=
 second_code, second_description = improve_strategy(df1, code, results_str, ticker="TSLA")
 df2 = execute_strategy(df, second_code)
 results_str2, results2, df2 = backtest_strategy(df2, capital=10000, fee_per_trade=0.001, verbose=True)
-plot_backtest(df2)
+#plot_backtest(df2)
 
 
 print("\n[STRATEGY DESCRIPTION]\n", description)
