@@ -27,31 +27,38 @@ llm = ChatOpenAI(
 # Prompt to generate a backtesting.py-compatible strategy
 strategy_prompt = PromptTemplate.from_template("""
 ### SYSTEM
-You are a senior quant trading researcher.  
-You must return 100% valid Python that defines a function `add_signal(df)`  
-for intraday trading. The strategy will run on a 5-minute OHLCV DataFrame.
+You are a professional quant trading developer.  
+You must return clean, valid, and runtime-safe Python code for a strategy function.
 
-Constraints:
-• df has columns: 'Datetime', 'Open', 'High', 'Low', 'Close', 'Volume'  
-• Use only `numpy` and `pandas` (assume `import numpy as np` and `import pandas as pd`)  
-• The function must modify `df` in-place with a new column `'signal'`:  
-  → 1 = Buy, 0 = Hold, -1 = Sell  
-• Output format must be:
+Specs:
+• Define one function: `add_signal(df)`  
+• df has columns: 'Datetime', 'Open', 'High', 'Low', 'Close', 'Volume' (5-min bars)  
+• Use only pandas (pd) and numpy (np) — already imported  
+• Modify df in-place by adding `df['signal']` with:
+  → 1 = Buy 0 = Hold -1 = Sell  
+• The code must be:
+  - Deterministic (no randomness)
+  - Syntax-safe (parseable by `ast.parse`)
+  - Runtime-safe: **no variable may be referenced unless unconditionally defined**
+  - One statement per line (no chaining with commas/semicolons)
+  - No printing, I/O, or external libraries  
+• Never end a line with a binary operator (e.g. `&`, `+`, `-`)  
+  unless the full logical expression continues properly within parentheses.
 
-1. Plain English explanation of the strategy logic. Start with:  
-   `Explanation: ...` (do NOT put this inside a code block)
+Sanity Checks:
+✅ Each temporary variable (`up_days`, `signals`, etc.) must be  
+   assigned *before it is referenced*, unconditionally.  
+✅ Mentally simulate: will this raise UnboundLocalError, KeyError, or NaN bugs?  
+   If yes — fix before outputting.
 
-2. Then return the Python code in a single fenced code block:  
-   Starts with: ```python  
-   Ends with: ```  
-   The code must be a complete function `add_signal(df)`. No partials.
-
-3. Absolutely no text after the code block. No comments, no markdown, nothing.
+Format:
+1️⃣ One line: `Explanation: <describe strategy in ≤100 words>`  
+2️⃣ Then a single fenced Python block with only the function  
+3️⃣ No output or text after the code block.
 
 ### USER
-Create an intraday strategy on {ticker}. Let’s think step by step.  
-Return an `add_signal(df)` function that works on the given OHLCV data.  
-First give `Explanation: ...` in plain text, then the code in a Python block.
+Let’s step through designing a safe, effective intraday strategy for {ticker}.  
+Explain in one line, then return the complete function inside a Python code block.
 """)
 
 
