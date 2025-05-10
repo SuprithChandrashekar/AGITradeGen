@@ -2,6 +2,7 @@ from agent.data_fetch import fetch_intraday_data
 from agent.data_split import leave_one_out_cv, ransac_regression, split_data
 from agent.strategy import generate_strategy, execute_strategy, improve_strategy
 from agent.eval import backtest_strategy, plot_backtest
+from reports.append_results import append_results
 
 import pandas as pd
 import numpy as np
@@ -44,3 +45,15 @@ print("\n[IMPROVED STRATEGY DESCRIPTION]\n", second_description)
 print("\n[IMPROVED STRATEGY CODE]\n", second_code)
 print("\n[IMPROVED BACKTEST RESULTS]\n", results_str2)
 print(df2.head())
+
+report_data = {
+    "timestamp": None,  # This will be set by the append_report function if None
+    "strategy_description": description,
+    "strategy_code": code,
+    "backtest_results": results_str,
+    "improved_strategy_description": second_description,
+    "improved_strategy_code": second_code,
+    "improved_backtest_results": results_str2
+}
+append_results(report_data)
+print("Results have been appended to the report Excel file.")
