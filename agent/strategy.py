@@ -9,7 +9,7 @@ from backtesting import Strategy
 from backtesting.test import SMA
 from backtesting.lib import crossover
 
-
+import google.generativeai as genai
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 
@@ -18,9 +18,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 llm = ChatOpenAI(
-    model="nvidia/llama-3.1-nemotron-70b-instruct",
+    model="nvidia/llama-3.1-nemotron-70b-instruct",  # Or another compatible Gemini model
+    api_key=os.getenv("OPENAI_API_KEY"),  # Replace with your Gemini API key
     base_url="https://integrate.api.nvidia.com/v1",
-    api_key= os.getenv("NVIDIA_API_KEY"),
     temperature=0.5,
 )
 
