@@ -70,7 +70,7 @@ def ransac_regression(df: pd.DataFrame, feature_cols: List[str], target_col: str
     X = df[feature_cols]
     y = df[target_col]
     
-    ransac = RANSACRegressor(base_estimator=model)
+    ransac = RANSACRegressor(estimator=model)
     ransac.fit(X, y)
     
     inliers = ransac.inlier_mask_
