@@ -25,14 +25,14 @@ ransac_results = ransac_regression(
 )
 df_clean = df_raw[ransac_results["inliers"]].reset_index(drop=True)
 splits = split_data(df_clean, test_size=0.2, shuffle=False)
-df = splits['train']
+train_df = splits['train']
 test_df = splits['test']
 
-code, description = generate_strategy(df)
+code, description = generate_strategy(train_df)
 df1 = execute_strategy(test_df, code)
 results_str, results, df1 = backtest_strategy(df1, capital=10000, fee_per_trade=0.001, verbose=True)
 second_code, second_description = improve_strategy(df1, code, results_str, ticker="TSLA")
-df2 = execute_strategy(df, second_code)
+df2 = execute_strategy(test_df, second_code)
 results_str2, results2, df2 = backtest_strategy(df2, capital=10000, fee_per_trade=0.001, verbose=True)
 #plot_backtest(df2)
 

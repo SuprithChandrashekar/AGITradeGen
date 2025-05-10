@@ -26,31 +26,33 @@ llm = ChatOpenAI(
 
 # Prompt to generate a backtesting.py-compatible strategy
 strategy_prompt = PromptTemplate.from_template("""
-You are a quantitative trading developer.
+### SYSTEM
+You are a senior quant trading researcher.  
+You must return 100% valid Python that defines a function `add_signal(df)`  
+for intraday trading. The strategy will run on a 5-minute OHLCV DataFrame.
 
-Your task is to create a profitable intraday trading strategy for the U.S. stock {ticker}, using provided OHLCV data.
+Constraints:
+• df has columns: 'Datetime', 'Open', 'High', 'Low', 'Close', 'Volume'  
+• Use only `numpy` and `pandas` (assume `import numpy as np` and `import pandas as pd`)  
+• The function must modify `df` in-place with a new column `'signal'`:  
+  → 1 = Buy, 0 = Hold, -1 = Sell  
+• Output format must be:
 
-You will be given a Pandas DataFrame called `df` containing these columns:
-- 'Datetime'
-- 'Open', 'High', 'Low', 'Close', 'Volume'
+1. Plain English explanation of the strategy logic. Start with:  
+   `Explanation: ...` (do NOT put this inside a code block)
 
-Your goal is to analyze the data and populate a new column `signal` such that:
-- `1` means "Buy"
-- `0` means "Hold"
-- `-1` means "Sell"
-                                               
-Before doing this, you must carefully analyze the given DataFrame create a strategy that is profitable and robust.              
+2. Then return the Python code in a single fenced code block:  
+   Starts with: ```python  
+   Ends with: ```  
+   The code must be a complete function `add_signal(df)`. No partials.
 
-The strategy must be executable and deterministic using only Pandas/Numpy.
+3. Absolutely no text after the code block. No comments, no markdown, nothing.
 
-You must return:
-1. A brief explanation of your strategy
-2. A function named `add_signal(df)` in a Python code block (```python) that modifies the DataFrame in-place to add the `signal` column.
-                                               
-IMPORTANT:
-Ensure that any Series assigned to `df["signal"]` uses the same index as `df`. Example:
-```python
-df["signal"] = pd.Series(logic_array, index=df.index)""")
+### USER
+Create an intraday strategy on {ticker}. Let’s think step by step.  
+Return an `add_signal(df)` function that works on the given OHLCV data.  
+First give `Explanation: ...` in plain text, then the code in a Python block.
+""")
 
 
 chain = strategy_prompt | llm
