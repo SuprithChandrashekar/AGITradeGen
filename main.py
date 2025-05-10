@@ -1,5 +1,5 @@
 from agent.data_fetch import fetch_intraday_data
-from agent.data_split import leave_one_out_cv, ransac_regression
+from agent.data_split import leave_one_out_cv, ransac_regression, split_data
 from agent.strategy import generate_strategy, execute_strategy, improve_strategy
 from agent.eval import backtest_strategy, plot_backtest
 
@@ -18,19 +18,18 @@ import numpy as np
 
 
 df_raw = fetch_intraday_data("TSLA", "5m", "5d", use_cache=True)
-cv_results = leave_one_out_cv(
-    df_raw,
-    feature_cols=["Open", "High", "Low", "Close", "Volume"],
-    target_col="Close"
-)
 ransac_results = ransac_regression(
     df_raw,
     feature_cols=["Open", "High", "Low", "Close", "Volume"],
     target_col="Close"
 )
-df = df_raw[ransac_results["inliers"]].reset_index(drop=True)
+df_clean = df_raw[ransac_results["inliers"]].reset_index(drop=True)
+splits = split_data(df_clean, test_size=0.2, shuffle=False)
+df = splits['train']
+test_df = splits['test']
+
 code, description = generate_strategy(df)
-df1 = execute_strategy(df, code)
+df1 = execute_strategy(test_df, code)
 results_str, results, df1 = backtest_strategy(df1, capital=10000, fee_per_trade=0.001, verbose=True)
 second_code, second_description = improve_strategy(df1, code, results_str, ticker="TSLA")
 df2 = execute_strategy(df, second_code)

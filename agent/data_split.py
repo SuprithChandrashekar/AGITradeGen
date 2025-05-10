@@ -81,3 +81,19 @@ def ransac_regression(df: pd.DataFrame, feature_cols: List[str], target_col: str
         'inliers': inliers,
         'outliers': outliers
     }
+
+def split_data(df: pd.DataFrame, test_size: float = 0.2, shuffle: bool = False) -> Dict[str, pd.DataFrame]:
+    """
+    Split the provided DataFrame into training and testing sets.
+    
+    Parameters:
+        df        : The DataFrame to split.
+        test_size : Proportion of the dataset to allocate to the test set (default 0.2).
+        shuffle   : Whether to shuffle the data before splitting (default False).
+
+    Returns:
+        A dictionary with keys 'train' and 'test' containing the split DataFrames.
+    """
+
+    train_df, test_df = train_test_split(df, test_size=test_size, shuffle=shuffle)
+    return {'train': train_df, 'test': test_df}
