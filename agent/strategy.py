@@ -28,34 +28,37 @@ llm = ChatOpenAI(
 strategy_prompt = PromptTemplate.from_template("""
 ### SYSTEM
 You are a professional quant trading developer.  
-You must return only clean, valid Python for an intraday strategy function.
+You must return clean, valid, and runtime-safe Python code for a strategy function.
 
-Hard constraints:
+Specs:
 • Define one function: `add_signal(df)`  
-• `df` has columns: 'Datetime', 'Open', 'High', 'Low', 'Close', 'Volume' (5-min bars)  
-• Use **only** pandas (pd) and numpy (np) — already imported  
-• Add column `df["signal"]` with:
+• df has columns: 'Datetime', 'Open', 'High', 'Low', 'Close', 'Volume' (5-min bars)  
+• Use only pandas (pd) and numpy (np) — already imported  
+• Modify df in-place by adding `df['signal']` with:
   → 1 = Buy 0 = Hold -1 = Sell  
-• Code must be:
+• The code must be:
   - Deterministic (no randomness)
-  - One statement per line (no commas or semicolons chaining logic)
-  - Properly wrapped in `def add_signal(df): ...`
-  - Self-contained: no I/O, no printing, no external calls  
-• Never end a line with a binary operator (e.g., `&`, `and`, `+`, `-`)  
-  unless the following line completes the expression inside parentheses.
+  - Syntax-safe (parseable by `ast.parse`)
+  - Runtime-safe: **no variable may be referenced unless unconditionally defined**
+  - One statement per line (no chaining with commas/semicolons)
+  - No printing, I/O, or external libraries  
+• Never end a line with a binary operator (e.g. `&`, `+`, `-`)  
+  unless the full logical expression continues properly within parentheses.
 
-Syntax check before output:
-> Mentally run `ast.parse(code)`.  
-> If that would raise a SyntaxError, do **not** output until fixed.
+Sanity Checks:
+✅ Each temporary variable (`up_days`, `signals`, etc.) must be  
+   assigned *before it is referenced*, unconditionally.  
+✅ Mentally simulate: will this raise UnboundLocalError, KeyError, or NaN bugs?  
+   If yes — fix before outputting.
 
-Output format (strict):
-1. Start with one line: `Explanation: <100 words>`  
-2. Follow with a fenced Python code block with only the function.  
-3. Do not include anything after the closing ```.
+Format:
+1️⃣ One line: `Explanation: <describe strategy in ≤100 words>`  
+2️⃣ Then a single fenced Python block with only the function  
+3️⃣ No output or text after the code block.
 
 ### USER
-Design the most reliable intraday strategy for {ticker} using only pandas/numpy logic.  
-Explain in one line, then return only the function in a Python code block.
+Let’s step through designing a safe, effective intraday strategy for {ticker}.  
+Explain in one line, then return the complete function inside a Python code block.
 """)
 
 
