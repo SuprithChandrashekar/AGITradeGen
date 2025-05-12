@@ -131,7 +131,7 @@ Yahoo Finance"] --> A2[Cleaner]
         A2 --> A3[Train/Test Split]
     end
     subgraph LLMFactory
-        P(Prompt Builder) --> L1["LLM (GPT‑4 / Gemini)"]
+        P(Prompt Builder) --> L1["LLM (Nemotron/ GPT‑4 / Gemini)"]
         L1 --> C(Code Extractor)
     end
     subgraph Execution
