@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 llm = ChatOpenAI(
-    model="nvidia/llama-3.1-nemotron-70b-instruct",  # Or another compatible Gemini model
+    model="nvidia/llama-3.3-nemotron-super-49b-v1",  # Or another compatible Gemini model
     api_key=os.getenv("OPENAI_API_KEY"),  # Replace with your Gemini API key
     base_url="https://integrate.api.nvidia.com/v1",
     temperature=0.5,
@@ -59,6 +59,7 @@ Format:
 ### USER
 Let’s step through designing a safe, effective intraday strategy for {ticker}.  
 Explain in one line, then return the complete function inside a Python code block.
+The function must be executable and deterministic using only Pandas/Numpy.
 """)
 
 
