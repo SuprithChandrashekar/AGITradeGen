@@ -146,33 +146,52 @@ Ensure that any Series assigned to `df["signal"]` uses the same index as `df`. E
 ```python
 df["signal"] = pd.Series(logic_array, index=df.index)""")
 
-def improve_strategy(df, code: str, results_str: str, ticker="TSLA"):
-    try:
-        # Combine strategy code and backtest result
-        prompt_input = {
-            "ticker": ticker,
-            "code": code,
-            "results": results_str
-        }
-        full_input = (
-            f"STRATEGY CODE:\n```python\n{code}\n```\n\n"
-            f"BACKTEST RESULTS:\n{results_str}"
-        )
-        chain = improvement_prompt | llm
-        response = chain.invoke({"ticker": ticker, "input": full_input})
-        text = response["text"] if isinstance(response, dict) else str(response)
+def improve_strategy(
+    df,
+    code: str,
+    results_str: str,
+    ticker: str = "TSLA",
+    historical_context: str | None = None,          
+):
+    """
+    Feed the original code & back‑test (plus optional historic champion)
+    into the LLM and return (new_code, explanation).
+    """
+    llm_prompt = """You are an algorithmic‑trading Python expert.
+Improve the following strategy while keeping it executable.
 
-        if "```" in text:
-            parts = text.split("```")
-            explanation = parts[0].strip()
-            code_block = next((p for p in parts if "def" in p or "df[" in p), "")
-            improved_code = code_block.replace("python", "").strip()
-            explanation = ast.literal_eval(f"'''{explanation}'''")
-            improved_code = ast.literal_eval(f"'''{improved_code}'''")
-            return improved_code, explanation
-        else:
-            return "# No improved code returned", text.strip()
+{input_block}
 
-    except Exception as e:
-        print(f"[ERROR] Strategy improvement failed: {e}")
-        return "# Error", "Improvement generation failed."
+Return ONLY valid Python code that defines `add_signal(df)`.
+"""
+
+    # ╭─ optional champion block ─╮
+    hist_block = (
+        "\n\n# —— HISTORICAL TOP STRATEGY ——\n"
+        f"{historical_context}\n"
+        "# ————————————————————————————"
+        if historical_context else ""
+    )
+
+    input_block = (
+        f"STRATEGY CODE:\n```python\n{code}\n```\n\n"
+        f"BACKTEST RESULTS:\n{results_str}{hist_block}"
+    )
+
+    prompt = llm_prompt.format(input_block=input_block)
+
+    # ▶️  your own LLM call goes here  ◀️
+    # chain = improvement_prompt | llm
+    # response = chain.invoke({"ticker": ticker, "input": prompt})
+    # text = response["text"] if isinstance(response, dict) else str(response)
+    text = "```python\n# mock improved code\ndef add_signal(df):\n    df['signal']=0\n    return df\n```"  # placeholder
+
+    # ── extract code block ─────────────────────────────────────────────
+    if "```" in text:
+        parts = text.split("```")
+        code_block = next((p for p in parts if "def" in p or "df[" in p), "")
+        improved_code = code_block.replace("python", "").strip()
+        explanation   = parts[0].strip()
+        return improved_code, explanation
+
+    return "# No improved code returned", text.strip()

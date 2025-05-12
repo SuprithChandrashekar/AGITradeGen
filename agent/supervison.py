@@ -43,9 +43,20 @@ Output the agent should provide:
     - Similar historical patterns
 - Updated Insights report with new suggestions
 """
+"""
+AI Strategy Supervising Analyst Agent
+Ranks every historical strategy run and (optionally) feeds the best
+performer back to other modules.
+
+✓  reads   ./reports/strategy_results.xlsx
+✓  scores  ROI • Sharpe • Drawdown • Trade‑count
+✓  analyse(top_n=3)   → JSON suggestions from LLM
+✓  best_historical()  → dict with description, code & metrics of the champion
+"""
+
 from __future__ import annotations
-import os
-import json
+
+import json, os
 from datetime import datetime
 from pathlib import Path
 
@@ -54,19 +65,13 @@ from dotenv import load_dotenv
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 
-# ──────────────────────────────────────────────
-# Configuration
-# ──────────────────────────────────────────────
+# ─── config ────────────────────────────────────────────────────────────
 load_dotenv()
 
-REPORT_FILE      = "strategy_results.xlsx"   # Excel file inside ../reports/
-TOP_N            = 3                         # how many best strategies to review
-WEIGHTS = {                                  # composite‑score weightings
-    "return":   0.35,
-    "sharpe":   0.35,
-    "drawdown": 0.15,   # lower is better → we invert later
-    "trades":   0.15,
-}
+REPORT_FILE = "strategy_results.xlsx"
+TOP_N       = 3
+
+WEIGHTS = {"return": 0.35, "sharpe": 0.35, "drawdown": 0.15, "trades": 0.15}
 
 LLM = ChatOpenAI(
     model       = "nvidia/llama-3.3-nemotron-super-49b-v1",
@@ -76,79 +81,74 @@ LLM = ChatOpenAI(
 )
 
 PROMPT = PromptTemplate.from_template("""
-You are a quantitative strategy manager.
+You are a senior quantitative strategist.
 
 For each of the {top_n} strategy records below (JSON list), return:
   • `strategy_id`          – use its timestamp
-  • `summary`              – max 30 words on why it outperformed
-  • `tweak`                – one specific improvement to entry/exit logic
-  • `sl_pct`, `tp_pct`     – stop‑loss / take‑profit in %
-  • `exp_return_3mo`       – expected 3‑month return in %
+  • `summary`              – ≤30 words on why it outperformed
+  • `tweak`                – one concrete improvement
+  • `sl_pct`, `tp_pct`     – stop‑loss / take‑profit in %
+  • `exp_return_3mo`       – expected 3‑month return in %
   • `confidence`           – 0–1
 
 DATA:
 {data}
 """)
 
-# ──────────────────────────────────────────────
-# Helper functions
-# ──────────────────────────────────────────────
-def load_report(path: Path) -> pd.DataFrame:
-    if not path.exists():
-        raise FileNotFoundError(f"Report not found: {path}")
-    return pd.read_excel(path)
+# ─── internal helpers ──────────────────────────────────────────────────
+def _report_path() -> Path:
+    """Absolute path to the Excel log."""
+    return (Path(__file__).parent / ".." / "reports" / REPORT_FILE).resolve()
 
-def compute_score(df: pd.DataFrame) -> pd.Series:
-    """Composite score: higher return/sharpe + more trades, lower drawdown."""
-    pct_rank = lambda s: s.rank(pct=True)                # 0–1, ascending
-    score = (
-          WEIGHTS["return"]   * pct_rank(df["improved_return_pct"])
-        + WEIGHTS["sharpe"]   * pct_rank(df["improved_sharpe"])
-        + WEIGHTS["drawdown"] * (1 - pct_rank(df["improved_max_drawdown_pct"]))
-        + WEIGHTS["trades"]   * pct_rank(df["improved_n_trades"])
+def _compute_score(df: pd.DataFrame) -> pd.Series:
+    pct = lambda s: s.rank(pct=True)
+    return (
+          WEIGHTS["return"]   * pct(df["improved_return_pct"])
+        + WEIGHTS["sharpe"]   * pct(df["improved_sharpe"])
+        + WEIGHTS["drawdown"] * (1 - pct(df["improved_max_drawdown_pct"]))
+        + WEIGHTS["trades"]   * pct(df["improved_n_trades"])
     )
-    return score
 
-def build_prompt(df_top: pd.DataFrame, top_n: int) -> str:
-    payload = df_top.to_dict(orient="records")
-    return PROMPT.format(top_n=top_n, data=json.dumps(payload, indent=2))
+# ─── public API ────────────────────────────────────────────────────────
+def analyse(top_n: int = TOP_N) -> str:
+    """Ask the LLM for improvement ideas on the current Top‑N strategies."""
+    df = pd.read_excel(_report_path())
+    df["score"] = _compute_score(df)
+    df_top      = df.nlargest(top_n, "score")
 
-def analyse(report_file: str = REPORT_FILE, top_n: int = TOP_N) -> str:
-    base_dir   = Path(__file__).resolve().parent
-    report_dir = (base_dir / ".." / "reports").resolve()
-    report_path = report_dir / report_file
+    prompt = PROMPT.format(
+        top_n = top_n,
+        data  = json.dumps(df_top.to_dict("records"), indent=2)
+    )
+    resp   = LLM.invoke(prompt)
+    text   = resp.get("text", resp) if isinstance(resp, dict) else str(resp)
 
-    df = load_report(report_path)
+    # save for history
+    out_dir = _report_path().parent / "insights"
+    out_dir.mkdir(exist_ok=True)
+    stamp   = datetime.now().strftime("%Y%m%d_%H%M%S")
+    (out_dir / f"insights_{stamp}.json").write_text(text)
 
-    # Ensure required columns exist
-    needed = [
-        "improved_return_pct", "improved_sharpe",
-        "improved_max_drawdown_pct", "improved_n_trades",
+    return text
+
+
+def best_historical(keep_cols: list[str] | None = None) -> dict[str, str]:
+    """
+    Return a dict describing the single best strategy ever logged.
+    Default columns: description • code • metrics.
+    """
+    df = pd.read_excel(_report_path())
+    df["score"] = _compute_score(df)
+    row = df.loc[df["score"].idxmax()]
+
+    cols = keep_cols or [
+        "strategy_description",
+        "strategy_code",
+        "improved_backtest_results",
     ]
-    missing = [c for c in needed if c not in df]
-    if missing:
-        raise ValueError(f"Missing columns in report: {missing}")
+    return {c: str(row[c]) for c in cols if c in row}
 
-    df = df.copy()
-    df["score"] = compute_score(df)
-    df_top = df.nlargest(top_n, "score")
 
-    prompt_text = build_prompt(df_top, top_n)
-    response    = LLM.invoke(prompt_text)
-    content     = response.get("text", response) if isinstance(response, dict) else str(response)
-
-    # Persist suggestions
-    insights_dir = report_dir / "insights"
-    insights_dir.mkdir(exist_ok=True)
-    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    (insights_dir / f"insights_{stamp}.json").write_text(content)
-
-    return content
-
-# ──────────────────────────────────────────────
-# Entry point
-# ──────────────────────────────────────────────
+# ─── CLI helper ────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    suggestions = analyse()
-    print("\nLLM Strategy Suggestions:\n")
-    print(suggestions)
+    print(analyse())
