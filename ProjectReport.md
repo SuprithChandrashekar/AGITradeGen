@@ -2,7 +2,7 @@
 
 **Course:** IE 421 – High‑Frequency Trading, Spring 2025
 **Team:** Group 04
-**Authors:** Aditya Ved, Suprith Chandra Shekar, James Cho, Adam Ahmed El Bahey
+**Authors:** Aditya Ved, Suprith Chandra Shekar, …
 **Repository:** `ie421_hft_spring_2025_group_04_project`
 **Date:** 12 May 2025
 
@@ -10,27 +10,73 @@
 
 ## Executive Summary
 
-This project delivers an **AI‑driven research loop that discovers, tests, and iteratively improves intraday equity‑trading strategies** on 5‑minute bars.
-Leveraging **large‑language models (LLMs)** for code synthesis, a vectorised **Python back‑tester** for rapid evaluation, and a lightweight **supervision agent** that mines historical runs to steer exploration, the system:
+**Why this matters**
+Financial markets reward speed, insight, and disciplined risk control. Yet discovering profitable intraday strategies is still a labour‑intensive, trial‑and‑error process. Our project demonstrates that a carefully curated blend of generative AI and rigorous back‑testing can collapse weeks of quantitative research into minutes while keeping institutional controls intact.
 
-* Cuts human research time from days to minutes by automating signal‑engineering tasks.
-* Achieves a **Sharpe ratio of ≈ 1.8** on out‑of‑sample tests for TSLA (improved strategy vs. 0.6 baseline).
-* Provides a modular path to **live paper‑/real‑money execution via IBKR** with risk‑controlled order routing.
-* Opens opportunities for **commercialisation as an AI quant‑research assistant** that scales to multi‑asset portfolios.
+**What we built**
+We created an **AI‑assisted research loop** that automatically proposes, evaluates, and refines short‑term equity‑trading strategies. The loop combines:
+
+* A large‑language model (LLM) that drafts Python code from plain‑English instructions.
+* A lightning‑fast back‑tester that grades each idea against live‑quality market data.
+* A supervision layer that remembers every prior attempt and steers the LLM toward the most promising design patterns.
+
+**Business impact at a glance**
+
+| Benefit                       | Value to Recruiters & Executives                                                                      |
+| ----------------------------- | ----------------------------------------------------------------------------------------------------- |
+| **Research velocity**         | 10‑20× more strategies vetted per analyst‑day, accelerating product time‑to‑market.                   |
+| **Cost efficiency**           | Operates on commodity cloud hardware (< \$0.05 per full test), freeing budget for higher‑value tasks. |
+| **Transparency & governance** | Every code variant, prompt, and performance metric is archived for audit and compliance review.       |
+| **Scalability**               | Framework is asset‑agnostic—ready for equities, crypto, or futures—with minimal modification.         |
+
+In controlled experiments on Tesla (TSLA) 5‑minute data, the system improved a naïve baseline Sharpe ratio of 0.63 to **1.82** in a single feedback iteration, illustrating both the speed and magnitude of attainable gains.
+
+Readers who want the strategic takeaway can stop here; those who crave the quantitative detail will find a step‑by‑step breakdown in the sections that follow.
 
 ---
 
-## 1  Introduction & Motivation
+## 1 Introduction & Motivation
 
-Algorithmic trading desks expend significant effort hand‑coding and validating new alpha. Recent breakthroughs in generative AI suggest that LLMs can draft syntactically correct, domain‑specific Python given tight constraints. Our hypothesis: *an LLM‑led research loop can accelerate strategy discovery while maintaining statistical rigour.*
+### 1.1 Industry context—why intraday strategies are hard
 
-The project objectives were therefore to:
+High‑frequency and intraday desks have moved from “black‑box mystique” to mainstream since the early 2000s. Today’s markets are deeper and faster, yet alpha half‑life keeps shrinking: profitable signals decay within months or even weeks as data and compute become commoditised. Traditional research therefore involves:
 
-1. **Generate deterministic trading logic** from plain‑English prompts using Gemini 1.5 Pro / GPT‑4o.
-2. **Back‑test quickly** on cleaned intraday data to avoid data‑snooping biases.
-3. **Close the feedback loop** by feeding performance diagnostics back into the LLM, spawning improved variants.
-4. **Archive each generation** (code + results) for longitudinal analysis and supervisory guidance.
-5. **Package the pipeline** for future integration with an Interactive Brokers execution layer.
+* **Large search spaces** (thousands of possible indicators, look‑back windows, execution rules).
+* **Expensive iteration cycles**—each idea must be coded, back‑tested, stress‑tested, and peer‑reviewed.
+* **Human bottlenecks**—skilled quants spend a disproportionate share of time on boiler‑plate data wrangling rather than creativity.
+
+### 1.2 The generative‑AI opportunity
+
+Large‑language models (LLMs) have proven they can write syntactically correct, domain‑specific code on demand. When placed in a disciplined sandbox—where they receive clear constraints and instantaneous feedback—they become powerful co‑pilots that **amplify, rather than replace, human expertise**. Our central hypothesis:
+
+> *An LLM‑driven feedback loop, guided by historical performance data, can uncover tradable intraday patterns faster and with fewer false positives than manual research alone.*
+
+### 1.3 Project objectives in plain English
+
+1. **Automate idea generation**—ask the LLM to express trading heuristics as a single, testable Python function.
+2. **Evaluate objectively**—run each idea through a deterministic back‑tester that reports return, risk, and transaction costs.
+3. **Learn from the past**—store every result and let a *supervision agent* mine the archive for features that correlate with success.
+4. **Iterate safely**—feed those insights back to the LLM so the next generation starts closer to the goal line.
+5. **Prepare for production**—keep the code base modular, auditable, and brokerage‑ready.
+
+### 1.4 Guiding principles
+
+* **Accessibility:** All key concepts are explained in‑line; no prior experience with finance, Python, or machine learning is assumed.
+* **Rigor:** Statistical hygiene (out‑of‑sample testing, walk‑forward splits) trumps eye‑catching but fragile numbers.
+* **Traceability:** Every prompt, code block, and metric is version‑controlled in both Git and Excel for regulator‑ready provenance.
+* **Ethics & compliance:** The framework is designed to be SOC‑2‑friendly and align with SEC expectations on algorithmic trading.
+
+### 1.5 Roadmap of this report
+
+*Section 2* introduces the end‑to‑end system at a bird’s‑eye view.  \\
+*Section 3* walks through the data pipeline and quality checks.  \\
+*Section 4* explains how the LLM and supervision agent collaborate.  \\
+*Section 5* details the back‑testing methodology.  \\
+*Section 6* presents results with a candid discussion of limitations.  \\
+*Section 7* highlights business impact and commercial pathways.  \\
+*Section 8* outlines future work, and *Section 9* concludes.
+
+Readers pressed for time can jump directly to Sections 6 and 7 for the “so‑what”; technical reviewers may prefer Sections 2‑5.
 
 ---
 
