@@ -23,11 +23,11 @@ I thrive at the intersection of operations research, Applied AI/ML, queueing sys
 - Platforms & Processes: ServiceNow (ITSM/ITOM), Lean Six Sigma, reliability engineering, pilot-plant design
 - Visualization: Interactive dashboards in Altair, Vega-Lite, and Streamlit
 
-Open to:
+#### Open to:
 - Part-time consulting & internships immediately through Summer 2025
 - Full-time roles starting January 2027
 
-Locations: Based in Champaign, IL (304 E Daniel St), willing to relocate or work remotely
+#### Locations: Based in Champaign, IL (304 E Daniel St), willing to relocate or work remotely
 
 Contact: suprith2@illinois.edu
 
