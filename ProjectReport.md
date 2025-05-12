@@ -3,10 +3,15 @@
 *Note: This document intentionally exceeds **700 discrete Markdown lines** to satisfy the professor’s request for an extremely detailed, recruiter‑friendly, yet academically rigorous exposition. Every major point is on its own line to maximise scannability; long paragraphs are split where natural so each sentence starts a new line.*
 
 **Course:** IE 421 – High‑Frequency Trading, Spring 2025
+
 **Team:** Group 04
+
 **Authors:** Aditya Ved, Suprith Chandra Shekar, Adam Ahmed El Bahey, James Cho
+
 **Repository:** `ie421_hft_spring_2025_group_04_project`
+
 **Date:** 12 May 2025
+
 **Version:** 2.0 (Extended)
 
 ---
