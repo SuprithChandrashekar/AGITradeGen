@@ -124,23 +124,24 @@ Hence, our framework occupies a unique niche: **auto‑coding plus auto‑evalua
 ### 3.1 Bird’s‑Eye Diagram
 
 ```mermaid
-flowchart LR
+graph LR
     subgraph DataLayer
-        A1[Raw OHLCV<br/>Yahoo Finance] --> A2[Cleaner]
+        A1["Raw OHLCV
+Yahoo Finance"] --> A2[Cleaner]
         A2 --> A3[Train/Test Split]
     end
     subgraph LLMFactory
-        P[Prompt Builder] --> L1[LLM (GPT‑4 \/ Gemini)]
-        L1 --> C[Code Extractor]
+        P(Prompt Builder) --> L1["LLM (GPT‑4 / Gemini)"]
+        L1 --> C(Code Extractor)
     end
     subgraph Execution
-        C --> E1[Executor]
-        E1 --> B1[Back‑tester]
+        C --> E1(Executor)
+        E1 --> B1(Back‑tester)
     end
-    B1 --> R1[Result Logger]
-    R1 --> S1[Supervision Agent]
+    B1 --> R1(Result Logger)
+    R1 --> S1(Supervision Agent)
     S1 --> P
-    style S1 fill:#ffd,stroke:#333,stroke‑width:1px
+    style S1 fill:#ffd,stroke:#333,stroke-width:1px
 ```
 
 ### 3.2 Technology Stack
