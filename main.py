@@ -30,20 +30,22 @@ splits = split_data(df_clean, test_size=0.2, shuffle=False)
 train_df = splits['train']
 test_df = splits['test']
 
-# ─── initial strategy cycle ───────────────────────────────────────────
-code, description = generate_strategy(train_df)
-df1 = execute_strategy(test_df, code)
-results_str, results, df1 = backtest_strategy(df1, capital=10_000,
-                                             fee_per_trade=0.001, verbose=True)
+# ─── 1st Strategy Cycle ─────────────────────────────────────
+code1, desc1 = generate_strategy(train_df)
+df1 = execute_strategy(test_df, code1)
+results_str1, results1, df1 = backtest_strategy(
+    df1, capital=10_000, fee_per_trade=0.001, verbose=True
+)
 
-# log first cycle
+# Log initial run
 append_results({
-    "strategy_description":          description,
-    "strategy_code":                 code,
-    "backtest_results":              results_str,
+    "timestamp":                   pd.Timestamp.now(),
+    "strategy_description":        desc1,
+    "strategy_code":               code1,
+    "backtest_results":            results_str1,
 })
 
-# ─── get historic champion for the LLM ───────────────────────────────
+# ─── Get Historical Champion ───────────────────────────────
 try:
     champ = best_historical()
     champion_ctx = (
@@ -51,39 +53,32 @@ try:
         f"HISTORICAL CODE:\n```python\n{champ.get('strategy_code','')}\n```\n\n"
         f"HISTORICAL METRICS:\n{champ.get('improved_backtest_results','')}"
     )
-except Exception as err:
-    print("[SUPERVISOR] no historical context:", err)
+except Exception as e:
+    print("[SUPERVISOR] no historical context:", e)
     champion_ctx = None
 
-# ─── improved strategy cycle ─────────────────────────────────────────
-second_code, second_description = improve_strategy(
-    df1, code, results_str, ticker="TSLA",
-    historical_context=champion_ctx,         # ← NEW
+# ─── 2nd Strategy Cycle (Improved) ─────────────────────────
+code2, desc2 = improve_strategy(
+    df1,
+    code1,
+    results_str1,
+    ticker="TSLA",
+    historical_context=champion_ctx,
 )
-df2 = execute_strategy(test_df, second_code)
-results_str2, results2, df2 = backtest_strategy(df2, capital=10_000,
-                                                fee_per_trade=0.001, verbose=True)
+df2 = execute_strategy(test_df, code2)
+results_str2, results2, df2 = backtest_strategy(
+    df2, capital=10_000, fee_per_trade=0.001, verbose=True
+)
 
-print("✓ finished full two‑cycle run with supervisor feedback")
-#plot_backtest(df2)
+# Log improved run
+append_results({
+    "timestamp":                         pd.Timestamp.now(),
+    "strategy_description":              desc1,
+    "strategy_code":                     code1,
+    "backtest_results":                  results_str1,
+    "improved_strategy_description":     desc2,
+    "improved_strategy_code":            code2,
+    "improved_backtest_results":         results_str2,
+})
 
-
-print("\n[STRATEGY DESCRIPTION]\n", description)
-print("\n[STRATEGY CODE]\n", code)
-print("\n[BACKTEST RESULTS]\n", results_str)
-print("\n[IMPROVED STRATEGY DESCRIPTION]\n", second_description)
-print("\n[IMPROVED STRATEGY CODE]\n", second_code)
-print("\n[IMPROVED BACKTEST RESULTS]\n", results_str2)
-print(df2.head())
-
-report_data = {
-    "timestamp": None,  # This will be set by the append_report function if None
-    "strategy_description": description,
-    "strategy_code": code,
-    "backtest_results": results_str,
-    "improved_strategy_description": second_description,
-    "improved_strategy_code": second_code,
-    "improved_backtest_results": results_str2
-}
-append_results(report_data)
-print("Results have been appended to the report Excel file.")
+print("✓ Finished full two-cycle run with supervisor feedback")

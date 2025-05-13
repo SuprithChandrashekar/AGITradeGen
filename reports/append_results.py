@@ -14,10 +14,8 @@ def append_results(report_row: dict, filename="strategy_results.xlsx"):
     """
 
     # ─── 1) prepare output folder & path ───────────────────────────────────────
-    base_dir   = os.path.dirname(__file__)
-    reports_dir = os.path.join(base_dir, "reports")
-    os.makedirs(reports_dir, exist_ok=True)
-    out_path    = os.path.join(reports_dir, filename)
+    reports_dir = os.path.dirname(os.path.abspath(__file__))
+    out_path    = os.path.join(reports_dir, "strategy_results.xlsx")
 
     # ─── 2) normalize timestamp ───────────────────────────────────────────────
     ts = report_row.get("timestamp")
