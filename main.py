@@ -110,6 +110,7 @@ try:
     log("info", "MODULE OUT", "improve_strategy()", {"desc": desc2[:100]})
 
     log("info", "MODULE IN", "execute_strategy() [improved]", {"code_sample": second_code[:100]}, symbol="main", line=67)
+    print("[FULL_IMPROVED_CODE]\n" + second_code + "\n[END_FULL_IMPROVED_CODE]")
     df2 = execute_strategy(test_df, second_code)
     log("info", "MODULE OUT", "execute_strategy() [improved]", {"rows": len(df2)})
     results_str2, results2, df2 = backtest_strategy(df2, capital=10000, fee_per_trade=0.001, verbose=True)
@@ -136,5 +137,4 @@ log("info", "MAIN END", "Appending final results", {
 })
 
 append_results(log_entry)
-
 log("info", "MAIN END", f"Completed in {round(time.time() - start_time, 2)}s")

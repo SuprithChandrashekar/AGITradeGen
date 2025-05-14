@@ -4,6 +4,7 @@ import numpy as np
 import os 
 import ast
 import traceback
+import re
 
 from backtesting import Strategy
 from backtesting.test import SMA
@@ -12,6 +13,7 @@ from backtesting.lib import crossover
 import google.generativeai as genai
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
+from langchain.schema import AIMessage
 
 from dotenv import load_dotenv
 
@@ -172,7 +174,18 @@ You must return:
 IMPORTANT:
 Ensure that any Series assigned to `df["signal"]` uses the same index as `df`. Example:
 ```python
-df["signal"] = pd.Series(logic_array, index=df.index)""")
+df["signal"] = pd.Series(logic_array, index=df.index)
+
+Please output:
+
+1. A brief explanation of your changes.
+2. Your improved Python function wrapped in a fenced code block, e.g.:
+
+```python
+def add_signal(df):
+    # ...
+    return df
+                                                  """)
 
 def improve_strategy(
     df,
@@ -182,10 +195,10 @@ def improve_strategy(
     historical_context: str | None = None,
 ):
     """
-    Feed the original code & back-test (plus optional historic champion)
-    into the LLM and return (new_code, explanation).
+    Uses the LLM to analyze backtest performance and rewrite the strategy code.
+    Returns (improved_code, explanation).
     """
-    # Optional block to include the top historical strategy for context
+    # Include historical champion context if available
     hist_block = (
         "\n\n# —— HISTORICAL TOP STRATEGY ——\n"
         f"{historical_context}\n"
@@ -193,38 +206,99 @@ def improve_strategy(
         if historical_context else ""
     )
 
-    # Compose the input for the improvement prompt: original strategy code and backtest results
-    input_block = (
+    # Build the prompt input
+    prompt_input = (
         f"STRATEGY CODE:\n```python\n{code}\n```\n\n"
         f"BACKTEST RESULTS:\n{results_str}{hist_block}"
     )
 
     try:
-        # Run the improvement prompt through the LLM (LangChain pipeline)
+        # Invoke the LangChain prompt chain
         chain = improvement_prompt | llm
-        response = chain.invoke({"ticker": ticker, "input": input_block})
+        response = chain.invoke({"ticker": ticker, "input": prompt_input})
 
-        # Extract the text content from the LLM response (handle AIMessage or dict outputs)
-        if isinstance(response, AIMessage):  # LangChain's AIMessage type response
-            text = response.content
-        elif isinstance(response, dict):
+        # Extract text from the LangChain response
+        if isinstance(response, dict):
             text = response.get("text", "")
+        elif isinstance(response, AIMessage):
+            text = response.content
         else:
             text = str(response)
 
-        # If a code block is present in the output, split to isolate the improved code and explanation
+        if not text:
+            return "# No improved code returned", "LLM returned empty response."
+
+        # Split out explanation and code block
         if "```" in text:
             parts = text.split("```")
-            # Find the part containing the strategy code (look for function definition or DataFrame usage)
-            code_block = next((p for p in parts if "def add_signal" in p or "df[" in p), "")
-            improved_code = code_block.replace("python", "").strip()
             explanation = parts[0].strip()
-            return improved_code, explanation
+            improved_code = parts[1].replace("python", "").strip()
+        else:
+        # fallback: pull out any def add_signal...return df block
+            match = re.search(r"(def add_signal\(.*?return df)", text, re.S)
+            if match:
+                improved_code = match.group(1).strip()
+                explanation = text[: match.start()].strip()
+            else:
+            # absolute fallback
+                return "# No improved code returned", text.strip()
 
-        # Fallback: no code block found in the LLM response
-        return "# No improved code returned", text.strip()
+        # Clean up any escape sequences
+        try:
+            explanation = ast.literal_eval(f"'''{explanation}'''")
+        except Exception:
+            pass
+        try:
+            improved_code = ast.literal_eval(f"'''{improved_code}'''")
+        except Exception:
+            pass
 
+        # Final fallback: ensure there's a signal column
+        if "df['signal']" not in improved_code:
+            improved_code += "\n    df['signal'] = 0\n    return df"
+
+        import re
+
+        # === SANITIZATION START ===
+        #    We rebuild just the function definition and body, dropping any imports.
+
+        # 1) Extract the function block from whatever the LLM returned
+        code_match = re.search(r"(def add_signal\(.*)", improved_code, re.S)
+        if code_match:
+            func_text = code_match.group(1)
+        else:
+        # Fallback to minimal skeleton
+            func_text = "def add_signal(df):\n    pass"
+
+        # 2) Split into signature + body
+        lines = func_text.splitlines()
+        signature = lines[0]
+        body_lines = lines[1:]
+
+        # 3) Remove any existing 'return' lines from the body
+        body_lines = [ln for ln in body_lines if not ln.strip().startswith("return")]
+
+        # 4) Determine indentation (default 4 spaces)
+        indent = "    "
+        if body_lines and body_lines[0].startswith((" ", "\t")):
+            indent = re.match(r"^(\s+)", body_lines[0]).group(1)
+
+        # 5) Append a single guaranteed return inside the function
+        body_lines.append(f"{indent}return df")
+
+        # 6) Reassemble the sanitized function
+        improved_code = "\n".join([signature] + body_lines)
+        # === SANITIZATION END ===
+
+        return improved_code, explanation
+    
     except Exception as e:
-        # Handle errors gracefully by logging and returning an error indicator
-        print(f"[ERROR] Strategy improvement failed: {e}")
-        return "# Error", "Strategy improvement failed"
+        # On error, log and return a safe no-op strategy
+        print(f"[ERROR] LLM-based improvement failed: {e}")
+        import traceback; traceback.print_exc()
+        fallback_code = (
+            "def add_signal(df):\n"
+            "    df['signal'] = 0\n"
+            "    return df"
+        )
+        return fallback_code, f"LLM failed to improve: {e}"
