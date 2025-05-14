@@ -35,4 +35,3 @@ LinkedIn: https://www.linkedin.com/in/suprith-c-shekar/
 
 GitHub: https://github.com/SuprithChandrashekar
 
-
