@@ -148,6 +148,7 @@ Yahoo Finance"] --> A2[Cleaner]
 
 * **Python 3.11** for all orchestration code.
 * **Pandas 2.2** and **NumPy 1.26** for data manipulation.
+* **langchain** for building agent
 * **OpenAI Python 1.14** and **Google GenerativeAI 0.3** for LLM endpoints.
 * **Matplotlib 3.9** for deterministic plotting (no seaborn to avoid style side‑effects).
 * **FastParquet** persisted data snapshots for high‑throughput experimentation.
@@ -169,7 +170,7 @@ For academic purposes, we retained Yahoo but implemented robust cleaning.
 The JSON response is converted into a DataFrame with explicit timezone awareness (`America/New_York`).
 
 ### 4.3 Cleaning Rules
-
+///
 1. **Remove fully zero rows** (where all OHLCV are zeros).
 2. **Forward‑adjust for corporate actions** using split and dividend metadata.
 3. **Apply RANSAC Regression**:
@@ -179,6 +180,13 @@ The JSON response is converted into a DataFrame with explicit timezone awareness
    * We iterate until convergence or 50 iterations, labelling points with residual > 3σ as outliers.
 4. **Resample to strict 5‑minute grid** ensuring 78 bars per session.
 5. **Train/Test Split** as 80 % chronological for primary runs, but we expose `split_data(df, ...)` for walk‑forward windows.
+
+New
+
+1.	Column Normalization: After downloading, it flattens any multi-index column names from yfinance (e.g., if they are tuples).
+2.	Ticker Labeling: It adds a ticker column to the dataset, which helps in distinguishing data when multiple tickers are stored in the same table.
+3.	Date Handling: It resets the index to move the Date index into a date column, ensuring compatibility with the database schema.
+4.	Duplicate Handling: It uses ON CONFLICT(ticker, date) during insertion to avoid duplicate rows, and updates existing rows if there are any changes in the values.
 
 ### 4.4 Data Integrity Metrics
 
