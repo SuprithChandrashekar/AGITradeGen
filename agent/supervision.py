@@ -5,7 +5,7 @@ Ranks historical strategies and optionally feeds the best back for further impro
 
 from __future__ import annotations
 import json, os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -26,6 +26,28 @@ LLM = ChatOpenAI(
     base_url    = "https://integrate.api.nvidia.com/v1",
     temperature = 0.4,
 )
+
+def get_logger(module_name):
+    DEBUG_LEVEL = os.environ.get("DEBUG_LEVEL", "info").lower()
+    level_priority = {"verbose": 0, "info": 1, "warn": 2, "error": 3}
+
+    def log(level, tag, message, data=None, symbol=None, line=None):
+        if level_priority[level] < level_priority.get(DEBUG_LEVEL, 1):
+            return
+        timestamp = datetime.now(timezone.utc).isoformat()
+        origin = f"[{module_name.upper()}]"
+        symbol_str = f" - Called from {symbol}:{line}" if symbol and line else ""
+        try:
+            if data is not None:
+                if isinstance(data, (dict, list)):
+                    data_str = json.dumps(data, default=str)
+                else:
+                    data_str = str(data)
+                message = f"{message} - {data_str}"
+        except Exception:
+            message = f"{message} - [ERROR SERIALIZING DATA]"
+        print(f"[{timestamp}] {origin} {tag.upper()}{symbol_str} - {message}")
+    return log
 
 PROMPT = PromptTemplate.from_template("""
 You are a senior quantitative strategist.
@@ -64,7 +86,7 @@ def analyse(top_n: int = TOP_N) -> str:
 
     prompt = PROMPT.format(
         top_n=top_n,
-        data=json.dumps(df_top.to_dict("records"), indent=2),
+        data=json.dumps(df_top.to_dict("records"), indent=2, default=str),
     )
     resp = LLM.invoke(prompt)
     text = resp.get("text", resp) if isinstance(resp, dict) else str(resp)
@@ -82,16 +104,32 @@ def best_historical(keep_cols: list[str] | None = None) -> dict[str, str]:
     Return the highest-scoring historical run as a dict.
     Defaults to strategy_description, strategy_code, improved_backtest_results.
     """
+    logger = get_logger("supervision")
+    logger("info", "MODULE IN", "best_historical()", {
+        "report_path": _report_path()
+    })
     df = pd.read_excel(_report_path())
+    logger("verbose", "MODULE IN", "Loaded DataFrame", {
+        "rows": len(df),
+        "columns": list(df.columns)
+    })
     df["score"] = _compute_score(df)
     row = df.loc[df["score"].idxmax()]
 
-    cols = keep_cols or [
-        "strategy_description",
-        "strategy_code",
-        "improved_backtest_results",
-    ]
-    return {c: str(row[c]) for c in cols if c in row}
+    champ_ctx = {
+        "code": row["orig_code"],
+        "description": row["orig_desc"],
+        "metrics": {
+            "sharpe": row["improved_sharpe"],
+            "return": row["improved_return_pct"]
+        }
+    }
+    logger("info", "MODULE OUT", "best_historical()", {
+        "champ_ctx": champ_ctx
+    })
+    
+    
+    return champ_ctx
 
 # ─── CLI ───────────────────────────────────────────
 if __name__ == "__main__":

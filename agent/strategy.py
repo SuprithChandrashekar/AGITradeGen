@@ -9,6 +9,7 @@ import re
 from backtesting import Strategy
 from backtesting.test import SMA
 from backtesting.lib import crossover
+from agent.supervision import best_historical
 
 import google.generativeai as genai
 from langchain_core.prompts import PromptTemplate
@@ -51,7 +52,7 @@ llm = ChatOpenAI(
     model="nvidia/llama-3.3-nemotron-super-49b-v1",  # Or another compatible Gemini model
     api_key=os.getenv("OPENAI_API_KEY"),  # Replace with your Gemini API key
     base_url="https://integrate.api.nvidia.com/v1",
-    temperature=0.5,
+    temperature=0.1,
 )
 
 # Prompt to generate a backtesting.py-compatible strategy
@@ -190,12 +191,15 @@ def add_signal(df):
 import re
 import ast
 from typing import Optional, Tuple
+champ = best_historical()
+print(champ)
+hist_ctx = champ["code"] + "\n\n# Explanation:\n" + champ["description"]
 
 def sanitize_code(
     code: str,
     results_str: str,
     ticker: str = "TSLA",
-    historical_context: Optional[str] = None,
+    historical_context=hist_ctx,
 ) -> Tuple[str, str]:
     """
     Calls the LLM to rewrite `code` based on `results_str` (and optional history).
@@ -228,11 +232,9 @@ def sanitize_code(
         if not text:
             return "# No improved code returned", "LLM returned empty response."
 
-        # split explanation vs. code
         if "```" in text:
             parts = text.split("```")
-            explanation = parts[0].strip()
-            raw_code = parts[1].replace("python", "").strip()
+            explanation, raw_code = parts[0].strip(), parts[1].replace("python", "").strip()
         else:
             m = re.search(r"(def add_signal\(.*?return df)", text, re.S)
             if m:
@@ -289,18 +291,19 @@ def improve_strategy(
     Wrapper that sanitizes the LLM output and then injects noise-threshold
     and cooldown filters before returning final (code, explanation).
     """
-    # 1) Get improved code + explanation
-    improved_code, explanation = sanitize_code(
-        code, results_str, ticker, historical_context
-    )
+    # inside improve_strategy, after sanitize_code():
+    improved_code, explanation = sanitize_code(code, results_str, ticker, historical_context)
 
-    # 2) Post-processing filters: only inside add_signal
-    m = re.search(r"(def add_signal\([^:]+:.*?^)(.*?)(^return df)",
-                  improved_code, flags=re.S | re.M)
+    # inject filters
+    m = re.search(r"(def add_signal\([^:]+:.*?^)(.*?)(^return df)", improved_code,
+                flags=re.S | re.M)
     if m:
-        sig_block, body_block, ret_line = m.group(1), m.group(2), m.group(3)
-        indent = re.match(r"^(\s*)return df", ret_line, flags=re.M).group(1)
+        sig, body, ret = m.group(1), m.group(2), m.group(3)
+        indent = re.match(r"^(\s*)return df", ret, flags=re.M).group(1)
+
         filters = (
+            f"{indent}# Ensure pct_change exists\n"
+            f"{indent}df['pct_change'] = df['Close'].pct_change().fillna(0)\n\n"
             f"{indent}# Noise threshold (±0.1%)\n"
             f"{indent}threshold = 0.001\n"
             f"{indent}valid_up = df['pct_change'].shift(1) > threshold\n"
@@ -311,12 +314,20 @@ def improve_strategy(
             f"{indent}prev = df['signal'].shift(1).fillna(0).astype(int)\n"
             f"{indent}df.loc[df['signal']==prev, 'signal'] = 0\n"
         )
+
         improved_code = (
             improved_code[: m.start(2)]
-            + body_block
+            + body
             + filters
-            + ret_line
+            + ret
             + improved_code[m.end(3) :]
         )
+        cleaned = []
+        for line in improved_code.splitlines():
+            if "apply(" in line and "lambda" in line:
+                # skip the faulty ATR/RSI lines
+                continue
+            cleaned.append(line)
+        improved_code = "\n".join(cleaned)
 
     return improved_code, explanation
