@@ -41,34 +41,41 @@ def append_results(report_row: dict, filename="strategy_results.xlsx"):
 
     # ─── 4) helper: extract numeric metrics from raw string or dict ──────────
     def extract_metrics(raw):
-        text = ""
-        if isinstance(raw, dict):
-            text = "\n".join(f"{k}: {v}" for k, v in raw.items())
-        elif isinstance(raw, str):
-            text = raw
-        else:
-            return {}
-
-        # remove comma thousands separators
-        text = text.replace(",", "")
-
+        """
+        Extract performance metrics from a result string or dict.
+        Ensures all expected keys are present even if missing in raw input.
+        """
         mapping = {
-            "Initial Capital":  "initial_capital",
-            "Final Capital":    "final_capital",
-            "Total Return":     "return_pct",
-            "Sharpe Ratio":     "sharpe",
-            "Max Drawdown":     "max_drawdown_pct",
-            "Total Trades":     "n_trades",
-            "Fee Cost":         "commission",
+            "Initial Capital": "initial_capital",
+            "Final Capital": "final_capital",
+            "Total Return": "return_pct",
+            "Sharpe Ratio": "sharpe",
+            "Max Drawdown": "max_drawdown_pct",
+            "Total Trades": "n_trades",
+            "Fee Cost": "commission"
         }
 
-        out = {}
-        for label, col in mapping.items():
-            pat = re.compile(rf"^{re.escape(label)}.*?:\s*(-?\d+(?:\.\d+)?)",
-                             re.MULTILINE | re.IGNORECASE)
-            m = pat.search(text)
-            if m:
-                out[col] = float(m.group(1))
+        out = {v: None for v in mapping.values()}  # Default all fields to None
+
+        if isinstance(raw, dict):
+            for label, key in mapping.items():
+                for k, val in raw.items():
+                    if label in k:
+                        try:
+                            out[key] = float(val)
+                        except:
+                            out[key] = None
+        elif isinstance(raw, str):
+            for label, key in mapping.items():
+                import re
+                pat = re.compile(rf"{label}.*?:\s*(-?\d+(?:\.\d+)?|nan|inf)", re.IGNORECASE)
+                match = pat.search(raw)
+                if match:
+                    val = match.group(1)
+                    try:
+                        out[key] = float(val) if val.lower() not in ("nan", "inf") else 0.0
+                    except:
+                        out[key] = None
         return out
 
     # ─── 5) flatten both original & improved metrics ──────────────────────────

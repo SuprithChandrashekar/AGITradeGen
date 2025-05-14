@@ -37,48 +37,26 @@ results_str1, results1, df1 = backtest_strategy(
     df1, capital=10_000, fee_per_trade=0.001, verbose=True
 )
 
-# Log initial run
-append_results({
-    "timestamp":                   pd.Timestamp.now(),
-    "strategy_description":        desc1,
-    "strategy_code":               code1,
-    "backtest_results":            results_str1,
-})
+log_entry = {
+    "timestamp": pd.Timestamp.now(),
+    "strategy_description": desc1,
+    "strategy_code": code1,
+    "backtest_results": results_str1
+}
 
-# ─── Get Historical Champion ───────────────────────────────
 try:
-    champ = best_historical()
-    champion_ctx = (
-        f"HISTORICAL DESCRIPTION:\n{champ.get('strategy_description','')}\n\n"
-        f"HISTORICAL CODE:\n```python\n{champ.get('strategy_code','')}\n```\n\n"
-        f"HISTORICAL METRICS:\n{champ.get('improved_backtest_results','')}"
-    )
+    second_code, desc2 = improve_strategy(df1, code1, results_str1, ticker="TSLA")
+    df2 = execute_strategy(test_df, second_code)
+    results_str2, results2, df2 = backtest_strategy(df2, capital=10000, fee_per_trade=0.001, verbose=True)
+
+    log_entry["improved_strategy_description"] = desc2
+    log_entry["improved_strategy_code"] = second_code
+    log_entry["improved_backtest_results"] = results_str2
+
 except Exception as e:
-    print("[SUPERVISOR] no historical context:", e)
-    champion_ctx = None
+    print(f"[ERROR] Failed to improve strategy: {e}")
+    log_entry["improved_strategy_description"] = "(Improvement Failed)"
+    log_entry["improved_strategy_code"] = ""
+    log_entry["improved_backtest_results"] = ""
 
-# ─── 2nd Strategy Cycle (Improved) ─────────────────────────
-code2, desc2 = improve_strategy(
-    df1,
-    code1,
-    results_str1,
-    ticker="TSLA",
-    historical_context=champion_ctx,
-)
-df2 = execute_strategy(test_df, code2)
-results_str2, results2, df2 = backtest_strategy(
-    df2, capital=10_000, fee_per_trade=0.001, verbose=True
-)
-
-# Log improved run
-append_results({
-    "timestamp":                         pd.Timestamp.now(),
-    "strategy_description":              desc1,
-    "strategy_code":                     code1,
-    "backtest_results":                  results_str1,
-    "improved_strategy_description":     desc2,
-    "improved_strategy_code":            code2,
-    "improved_backtest_results":         results_str2,
-})
-
-print("✓ Finished full two-cycle run with supervisor feedback")
+append_results(log_entry)

@@ -42,12 +42,19 @@ def backtest_strategy(df, capital=10000, fee_per_trade=0.001, verbose=True):
     total_fees = total_trades * fee_per_trade * capital
     final_value = df['capital'].iloc[-1] - total_fees
 
+    mean_return = df['strategy_return'].mean()
+    std_return = df['strategy_return'].std()
+    if std_return == 0 or np.isnan(std_return):
+        sharpe = 0.0
+    else:
+        sharpe = mean_return / std_return * np.sqrt(252 * 78)
+
     # Generate summary
     results = {
-        "Initial Capital": capital,
+        "Initial Capital": float(capital),
         "Final Capital": round(final_value, 2),
         "Total Return (%)": round((final_value / capital - 1) * 100, 2),
-        "Sharpe Ratio": round(df['strategy_return'].mean() / df['strategy_return'].std() * np.sqrt(252 * 78), 2),  # 78 5-min bars/day
+        "Sharpe Ratio": round(sharpe, 2),
         "Max Drawdown (%)": round(100 * ((df['capital'].cummax() - df['capital']) / df['capital'].cummax()).max(), 2),
         "Total Trades": int(total_trades),
         "Fee Cost": round(total_fees, 2),
