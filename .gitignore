@@ -6,3 +6,5 @@ __pycache__/
 
 # Ignore environment variable file
 .env
+
+gitcommands.txt

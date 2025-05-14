@@ -174,51 +174,57 @@ Ensure that any Series assigned to `df["signal"]` uses the same index as `df`. E
 ```python
 df["signal"] = pd.Series(logic_array, index=df.index)""")
 
-def improve_strategy(df, code: str, results_str: str, ticker="TSLA"):
+def improve_strategy(
+    df,
+    code: str,
+    results_str: str,
+    ticker: str = "TSLA",
+    historical_context: str | None = None,
+):
     """
-    Uses the LLM to rewrite and explain the original strategy based on its backtest.
+    Feed the original code & back-test (plus optional historic champion)
+    into the LLM and return (new_code, explanation).
     """
+    # Optional block to include the top historical strategy for context
+    hist_block = (
+        "\n\n# —— HISTORICAL TOP STRATEGY ——\n"
+        f"{historical_context}\n"
+        "# ————————————————————————————"
+        if historical_context else ""
+    )
+
+    # Compose the input for the improvement prompt: original strategy code and backtest results
+    input_block = (
+        f"STRATEGY CODE:\n```python\n{code}\n```\n\n"
+        f"BACKTEST RESULTS:\n{results_str}{hist_block}"
+    )
+
     try:
-        print(f"[INFO] Improving strategy for {ticker}...")
-        # Build the prompt just like in strategy.py
-        full_input = (
-            f"STRATEGY CODE:\n```python\n{code}\n```\n\n"
-            f"BACKTEST RESULTS:\n{results_str}"
-        )
-
-        # Invoke the same prompt chain you use for generate_strategy()
+        # Run the improvement prompt through the LLM (LangChain pipeline)
         chain = improvement_prompt | llm
-        response = chain.invoke({"ticker": ticker, "input": full_input})
-        text = response.get("text", str(response))
-        print(f"[INFO] LLM response: {text}")
+        response = chain.invoke({"ticker": ticker, "input": input_block})
 
-        # Split out explanation vs. code block
+        # Extract the text content from the LLM response (handle AIMessage or dict outputs)
+        if isinstance(response, AIMessage):  # LangChain's AIMessage type response
+            text = response.content
+        elif isinstance(response, dict):
+            text = response.get("text", "")
+        else:
+            text = str(response)
+
+        # If a code block is present in the output, split to isolate the improved code and explanation
         if "```" in text:
             parts = text.split("```")
-            explanation = parts[0].strip()
-            code_block = next((p for p in parts if "def add_signal" in p), "")
+            # Find the part containing the strategy code (look for function definition or DataFrame usage)
+            code_block = next((p for p in parts if "def add_signal" in p or "df[" in p), "")
             improved_code = code_block.replace("python", "").strip()
-        else:
-            explanation = text.strip()
-            improved_code = ""
+            explanation = parts[0].strip()
+            return improved_code, explanation
 
-        # Unescape any literals
-        explanation = ast.literal_eval(f"'''{explanation}'''")
-        improved_code = ast.literal_eval(f"'''{improved_code}'''")
-
-        # Fallback: ensure signal column exists
-        if "df['signal']" not in improved_code:
-            improved_code += "\n    df['signal'] = 0\n    return df"
-
-        return improved_code, explanation
+        # Fallback: no code block found in the LLM response
+        return "# No improved code returned", text.strip()
 
     except Exception as e:
-        print(f"[ERROR] LLM-based improvement failed: {e}")
-        import traceback; traceback.print_exc()
-        # On failure, return a no‐op strategy and error note
-        fallback = (
-            "def add_signal(df):\n"
-            "    df['signal'] = 0\n"
-            "    return df"
-        )
-        return fallback, f"LLM failed: {str(e)}"
+        # Handle errors gracefully by logging and returning an error indicator
+        print(f"[ERROR] Strategy improvement failed: {e}")
+        return "# Error", "Strategy improvement failed"
