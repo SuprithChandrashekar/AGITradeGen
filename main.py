@@ -21,7 +21,7 @@ import time
  - Potentially add new agent to externally judge and improve the strategy
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import traceback
 import os
@@ -35,7 +35,7 @@ def get_logger(module_name):
     def log(level, tag, message, data=None, symbol=None, line=None):
         if level_priority[level] < level_priority.get(DEBUG_LEVEL, 1):
             return
-        timestamp = datetime.utcnow().isoformat() + "Z"
+        timestamp = datetime.now(timezone.utc).isoformat()
         origin = f"[{module_name.upper()}]"
         symbol_str = f" - Called from {symbol}:{line}" if symbol and line else ""
         try:
@@ -129,10 +129,6 @@ except Exception as e:
     log_entry["improved_strategy_description"] = "(Improvement Failed)"
     log_entry["improved_strategy_code"] = ""
     log_entry["improved_backtest_results"] = ""
-
-print("[RESULT_JSON_ORIG] " + json.dumps(results1, indent=2))
-if 'results2' in locals():
-    print("[RESULT_JSON_IMPROVED] " + json.dumps(results2, indent=2))
 
 log("info", "MAIN END", "Appending final results", {
     "orig_return_pct": results1.get("Total Return (%)"),

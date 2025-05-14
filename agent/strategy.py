@@ -180,18 +180,18 @@ def improve_strategy(
     results_str: str,
     ticker: str = "TSLA",
     historical_context: str | None = None,          
-):
+    ):
     """
     Feed the original code & back‑test (plus optional historic champion)
     into the LLM and return (new_code, explanation).
     """
     llm_prompt = """You are an algorithmic‑trading Python expert.
-Improve the following strategy while keeping it executable.
+    Improve the following strategy while keeping it executable.
 
-{input_block}
+    {input_block}
 
-Return ONLY valid Python code that defines `add_signal(df)`.
-"""
+    Return ONLY valid Python code that defines `add_signal(df)`.
+    """
 
     # ╭─ optional champion block ─╮
     hist_block = (
