@@ -153,11 +153,6 @@ Yahoo Finance"] --> A2[Cleaner]
 * **FastParquet** persisted data snapshots for high‑throughput experimentation.
 * **SQLite** ledger for prompt‑to‑result hashes in addition to Excel export.
 
-### 3.3 Configuration Philosophy
-
-All run‑time knobs are in `config.yaml` so an operations engineer can tweak markets, fee assumptions, and risk caps without touching code.
-This separation aligns with Twelve‑Factor App principles and simplifies CI/CD.
-
 ---
 
 ## 4 Data Engineering Pipeline
