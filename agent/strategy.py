@@ -187,18 +187,21 @@ def add_signal(df):
     return df
                                                   """)
 
-def improve_strategy(
-    df,
+import re
+import ast
+from typing import Optional, Tuple
+
+def sanitize_code(
     code: str,
     results_str: str,
     ticker: str = "TSLA",
-    historical_context: str | None = None,
-):
+    historical_context: Optional[str] = None,
+) -> Tuple[str, str]:
     """
-    Uses the LLM to analyze backtest performance and rewrite the strategy code.
+    Calls the LLM to rewrite `code` based on `results_str` (and optional history).
     Returns (improved_code, explanation).
     """
-    # Include historical champion context if available
+    # Build optional history block
     hist_block = (
         "\n\n# —— HISTORICAL TOP STRATEGY ——\n"
         f"{historical_context}\n"
@@ -206,18 +209,15 @@ def improve_strategy(
         if historical_context else ""
     )
 
-    # Build the prompt input
     prompt_input = (
         f"STRATEGY CODE:\n```python\n{code}\n```\n\n"
         f"BACKTEST RESULTS:\n{results_str}{hist_block}"
     )
-
     try:
-        # Invoke the LangChain prompt chain
         chain = improvement_prompt | llm
         response = chain.invoke({"ticker": ticker, "input": prompt_input})
 
-        # Extract text from the LangChain response
+        # extract text
         if isinstance(response, dict):
             text = response.get("text", "")
         elif isinstance(response, AIMessage):
@@ -228,77 +228,95 @@ def improve_strategy(
         if not text:
             return "# No improved code returned", "LLM returned empty response."
 
-        # Split out explanation and code block
+        # split explanation vs. code
         if "```" in text:
             parts = text.split("```")
             explanation = parts[0].strip()
-            improved_code = parts[1].replace("python", "").strip()
+            raw_code = parts[1].replace("python", "").strip()
         else:
-        # fallback: pull out any def add_signal...return df block
-            match = re.search(r"(def add_signal\(.*?return df)", text, re.S)
-            if match:
-                improved_code = match.group(1).strip()
-                explanation = text[: match.start()].strip()
+            m = re.search(r"(def add_signal\(.*?return df)", text, re.S)
+            if m:
+                raw_code = m.group(1).strip()
+                explanation = text[: m.start()].strip()
             else:
-            # absolute fallback
                 return "# No improved code returned", text.strip()
 
-        # Clean up any escape sequences
+        # literal‐eval to unescape
         try:
             explanation = ast.literal_eval(f"'''{explanation}'''")
-        except Exception:
+        except:
             pass
         try:
-            improved_code = ast.literal_eval(f"'''{improved_code}'''")
-        except Exception:
+            raw_code = ast.literal_eval(f"'''{raw_code}'''")
+        except:
             pass
 
-        # Final fallback: ensure there's a signal column
-        if "df['signal']" not in improved_code:
-            improved_code += "\n    df['signal'] = 0\n    return df"
+        # ensure a signal column exists
+        if "df['signal']" not in raw_code:
+            raw_code += "\n    df['signal'] = 0\n    return df"
 
-        import re
+        # sanitize: extract only the function and rebuild its body
+        m2 = re.search(r"(def add_signal\(.*)", raw_code, re.S)
+        func_text = m2.group(1) if m2 else "def add_signal(df):\n    pass"
 
-        # === SANITIZATION START ===
-        #    We rebuild just the function definition and body, dropping any imports.
-
-        # 1) Extract the function block from whatever the LLM returned
-        code_match = re.search(r"(def add_signal\(.*)", improved_code, re.S)
-        if code_match:
-            func_text = code_match.group(1)
-        else:
-        # Fallback to minimal skeleton
-            func_text = "def add_signal(df):\n    pass"
-
-        # 2) Split into signature + body
         lines = func_text.splitlines()
-        signature = lines[0]
-        body_lines = lines[1:]
-
-        # 3) Remove any existing 'return' lines from the body
-        body_lines = [ln for ln in body_lines if not ln.strip().startswith("return")]
-
-        # 4) Determine indentation (default 4 spaces)
+        sig = lines[0]
+        body = [l for l in lines[1:] if not l.strip().startswith("return")]
+        # detect indent
         indent = "    "
-        if body_lines and body_lines[0].startswith((" ", "\t")):
-            indent = re.match(r"^(\s+)", body_lines[0]).group(1)
+        if body and body[0].startswith((" ", "\t")):
+            indent = re.match(r"^(\s+)", body[0]).group(1)
+        body.append(f"{indent}return df")
 
-        # 5) Append a single guaranteed return inside the function
-        body_lines.append(f"{indent}return df")
-
-        # 6) Reassemble the sanitized function
-        improved_code = "\n".join([signature] + body_lines)
-        # === SANITIZATION END ===
-
+        improved_code = "\n".join([sig] + body)
         return improved_code, explanation
-    
+
     except Exception as e:
-        # On error, log and return a safe no-op strategy
         print(f"[ERROR] LLM-based improvement failed: {e}")
         import traceback; traceback.print_exc()
-        fallback_code = (
-            "def add_signal(df):\n"
-            "    df['signal'] = 0\n"
-            "    return df"
+        fallback = "def add_signal(df):\n    df['signal'] = 0\n    return df"
+        return fallback, f"LLM failed to improve: {e}"
+
+
+def improve_strategy(
+    df,
+    code: str,
+    results_str: str,
+    ticker: str = "TSLA",
+    historical_context: Optional[str] = None,
+) -> Tuple[str, str]:
+    """
+    Wrapper that sanitizes the LLM output and then injects noise-threshold
+    and cooldown filters before returning final (code, explanation).
+    """
+    # 1) Get improved code + explanation
+    improved_code, explanation = sanitize_code(
+        code, results_str, ticker, historical_context
+    )
+
+    # 2) Post-processing filters: only inside add_signal
+    m = re.search(r"(def add_signal\([^:]+:.*?^)(.*?)(^return df)",
+                  improved_code, flags=re.S | re.M)
+    if m:
+        sig_block, body_block, ret_line = m.group(1), m.group(2), m.group(3)
+        indent = re.match(r"^(\s*)return df", ret_line, flags=re.M).group(1)
+        filters = (
+            f"{indent}# Noise threshold (±0.1%)\n"
+            f"{indent}threshold = 0.001\n"
+            f"{indent}valid_up = df['pct_change'].shift(1) > threshold\n"
+            f"{indent}valid_down = df['pct_change'].shift(1) < -threshold\n"
+            f"{indent}df.loc[~valid_up & (df['signal']==1), 'signal'] = 0\n"
+            f"{indent}df.loc[~valid_down & (df['signal']==-1), 'signal'] = 0\n\n"
+            f"{indent}# Cooldown: no consecutive signals\n"
+            f"{indent}prev = df['signal'].shift(1).fillna(0).astype(int)\n"
+            f"{indent}df.loc[df['signal']==prev, 'signal'] = 0\n"
         )
-        return fallback_code, f"LLM failed to improve: {e}"
+        improved_code = (
+            improved_code[: m.start(2)]
+            + body_block
+            + filters
+            + ret_line
+            + improved_code[m.end(3) :]
+        )
+
+    return improved_code, explanation
