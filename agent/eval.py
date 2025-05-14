@@ -8,6 +8,33 @@ from statistics import stdev as StdDev  # or define a rolling one
 import traceback
 import matplotlib.pyplot as plt
 
+from datetime import datetime
+import json
+import traceback
+import os
+
+def get_logger(module_name):
+    DEBUG_LEVEL = os.environ.get("DEBUG_LEVEL", "info").lower()
+    level_priority = {"verbose": 0, "info": 1, "warn": 2, "error": 3}
+
+    def log(level, tag, message, data=None, symbol=None, line=None):
+        if level_priority[level] < level_priority.get(DEBUG_LEVEL, 1):
+            return
+        timestamp = datetime.utcnow().isoformat() + "Z"
+        origin = f"[{module_name.upper()}]"
+        symbol_str = f" - Called from {symbol}:{line}" if symbol and line else ""
+        try:
+            if data is not None:
+                if isinstance(data, (dict, list)):
+                    data_str = json.dumps(data, default=str)
+                else:
+                    data_str = str(data)
+                message = f"{message} - {data_str}"
+        except Exception:
+            message = f"{message} - [ERROR SERIALIZING DATA]"
+        print(f"[{timestamp}] {origin} {tag.upper()}{symbol_str} - {message}")
+    return log
+
 
 def backtest_strategy(df, capital=10000, fee_per_trade=0.001, verbose=True):
     """
@@ -52,7 +79,7 @@ def backtest_strategy(df, capital=10000, fee_per_trade=0.001, verbose=True):
     # Generate summary
     results = {
         "Initial Capital": float(capital),
-        "Final Capital": round(final_value, 2),
+        "Final Capital": float(round(final_value, 2)),
         "Total Return (%)": round((final_value / capital - 1) * 100, 2),
         "Sharpe Ratio": round(sharpe, 2),
         "Max Drawdown (%)": round(100 * ((df['capital'].cummax() - df['capital']) / df['capital'].cummax()).max(), 2),

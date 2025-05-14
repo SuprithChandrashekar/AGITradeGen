@@ -17,6 +17,34 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from datetime import datetime
+import json
+import traceback
+import os
+
+def get_logger(module_name):
+    DEBUG_LEVEL = os.environ.get("DEBUG_LEVEL", "info").lower()
+    level_priority = {"verbose": 0, "info": 1, "warn": 2, "error": 3}
+
+    def log(level, tag, message, data=None, symbol=None, line=None):
+        if level_priority[level] < level_priority.get(DEBUG_LEVEL, 1):
+            return
+        timestamp = datetime.utcnow().isoformat() + "Z"
+        origin = f"[{module_name.upper()}]"
+        symbol_str = f" - Called from {symbol}:{line}" if symbol and line else ""
+        try:
+            if data is not None:
+                if isinstance(data, (dict, list)):
+                    data_str = json.dumps(data, default=str)
+                else:
+                    data_str = str(data)
+                message = f"{message} - {data_str}"
+        except Exception:
+            message = f"{message} - [ERROR SERIALIZING DATA]"
+        print(f"[{timestamp}] {origin} {tag.upper()}{symbol_str} - {message}")
+    return log
+
+
 llm = ChatOpenAI(
     model="nvidia/llama-3.3-nemotron-super-49b-v1",  # Or another compatible Gemini model
     api_key=os.getenv("OPENAI_API_KEY"),  # Replace with your Gemini API key
