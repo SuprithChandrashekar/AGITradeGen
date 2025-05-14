@@ -176,18 +176,6 @@ For academic purposes, we retained Yahoo but implemented robust cleaning.
 The JSON response is converted into a DataFrame with explicit timezone awareness (`America/New_York`).
 
 ### 4.3 Cleaning Rules
-///
-1. **Remove fully zero rows** (where all OHLCV are zeros).
-2. **Forward‑adjust for corporate actions** using split and dividend metadata.
-3. **Apply RANSAC Regression**:
-
-   * Input features: *Open, High, Low, Volume*.
-   * Target: *Close*.
-   * We iterate until convergence or 50 iterations, labelling points with residual > 3σ as outliers.
-4. **Resample to strict 5‑minute grid** ensuring 78 bars per session.
-5. **Train/Test Split** as 80 % chronological for primary runs, but we expose `split_data(df, ...)` for walk‑forward windows.
-
-New
 
 1.	Column Normalization: After downloading, it flattens any multi-index column names from yfinance (e.g., if they are tuples).
 2.	Ticker Labeling: It adds a ticker column to the dataset, which helps in distinguishing data when multiple tickers are stored in the same table.
