@@ -75,6 +75,9 @@ Specs:
   - No printing, I/O, or external libraries  
 • Never end a line with a binary operator (e.g. `&`, `+`, `-`)  
   unless the full logical expression continues properly within parentheses.
+• Avoid combining too many strict filters (like RSI < 30 AND Close > ATR band) that rarely happen together.
+• Your goal is to generate signals that lead to **at least 5-15 trades** on 5-day, 5-minute data.
+
 
 Sanity Checks:
 ✅ Each temporary variable (`up_days`, `signals`, etc.) must be  
@@ -132,15 +135,24 @@ def execute_strategy(df: pd.DataFrame, code: str) -> pd.DataFrame:
     local_env = {"df": df.copy(), "np": np, "pd": pd}
     
     try:
+        if not is_valid_python(code):
+            raise SyntaxError("LLM-generated strategy code is invalid. Skipping execution.")
         exec(code, local_env)
         for val in local_env.values():
             if callable(val) and val.__name__.startswith("add_signal"):
-                val(local_env["df"])
+                val(local_env["df"]) 
                 break
         else:
             raise RuntimeError("No function named add_signal(...) found in strategy code.")
         
-        return local_env["df"]
+        result_df = local_env["df"]
+        if 'signal' in result_df.columns:
+            print("[DEBUG - Signals]", result_df['signal'].value_counts(dropna=False).to_dict())
+        else:
+            print("[ERROR] 'signal' column missing after execution.")
+
+
+        return result_df
 
     except Exception as e:
         print(f"[ERROR] Failed to execute strategy code: {e}")
@@ -177,10 +189,23 @@ Ensure that any Series assigned to `df["signal"]` uses the same index as `df`. E
 ```python
 df["signal"] = pd.Series(logic_array, index=df.index)
 
+⚠️ Avoid combining conditions that rarely co-occur (e.g., RSI < 30 AND SMA crossover AND ATR bands). These eliminate signals entirely.
+
+✅ Ensure your strategy generates at least 5–15 trades on 5-minute TSLA data over 5 days.
+
+💡 Prefer looser filters like:
+- RSI > 50 or < 60
+- MA5 vs MA20 crossover
+- Volatility filters using rolling std or simple ATR bands
+
+DO NOT generate strategies that result in df['signal'] being all 0.
+If you're unsure, default to a basic RSI-based momentum strategy that triggers trades.
+                                                                                                                                                     
 Please output:
 
 1. A brief explanation of your changes.
 2. Your improved Python function wrapped in a fenced code block, e.g.:
+                                                  
 
 ```python
 def add_signal(df):
@@ -279,6 +304,13 @@ def sanitize_code(
         fallback = "def add_signal(df):\n    df['signal'] = 0\n    return df"
         return fallback, f"LLM failed to improve: {e}"
 
+def is_valid_python(code_str):
+    try:
+        ast.parse(code_str)
+        return True
+    except SyntaxError as e:
+        print(f"[SYNTAX ERROR] Invalid generated code: {e}")
+        return False
 
 def improve_strategy(
     df,
@@ -292,6 +324,12 @@ def improve_strategy(
     and cooldown filters before returning final (code, explanation).
     """
     # inside improve_strategy, after sanitize_code():
+    # --- 🔁 NEW: Capture signal stats ---
+    signal_counts = df["signal"].value_counts(dropna=False).to_dict() if "signal" in df.columns else {}
+    signal_info_str = f"\n\nSignal Distribution (Original): {signal_counts}"
+    results_str = results_str + signal_info_str
+
+    # --- 🔁 Continue as before ---
     improved_code, explanation = sanitize_code(code, results_str, ticker, historical_context)
 
     # inject filters
@@ -303,7 +341,7 @@ def improve_strategy(
 
         filters = (
             f"{indent}# Ensure pct_change exists\n"
-            f"{indent}df['pct_change'] = df['Close'].pct_change().fillna(0)\n\n"
+            # f"{indent}df['pct_change'] = df['Close'].pct_change().fillna(0)\n\n"
             f"{indent}# Noise threshold (±0.1%)\n"
             f"{indent}threshold = 0.001\n"
             f"{indent}valid_up = df['pct_change'].shift(1) > threshold\n"

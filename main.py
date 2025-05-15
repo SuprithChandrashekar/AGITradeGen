@@ -3,6 +3,7 @@ from agent.data_split import leave_one_out_cv, ransac_regression, split_data
 from agent.strategy import generate_strategy, execute_strategy, improve_strategy
 from agent.supervision import best_historical
 from agent.eval import backtest_strategy, plot_backtest
+from agent.strategy import hist_ctx
 from reports.append_results import append_results
 
 import pandas as pd
@@ -106,7 +107,7 @@ try:
     "base_metrics": results1
     }, symbol="main", line=60)
 
-    second_code, desc2 = improve_strategy(df1, code1, results_str1, ticker="TSLA")
+    second_code, desc2 = improve_strategy(df1, code1, results_str1, ticker="TSLA", historical_context=hist_ctx)
     log("info", "MODULE OUT", "improve_strategy()", {"desc": desc2[:100]})
 
     log("info", "MODULE IN", "execute_strategy() [improved]", {"code_sample": second_code[:100]}, symbol="main", line=67)
