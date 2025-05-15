@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import subprocess
 import time
-import math
 from pathlib import Path
 
 import pandas as pd
@@ -35,11 +34,11 @@ def compute_sample_sizes():
     # mean test
     mean_ret = data.mean()
     std_ret  = data.std(ddof=1)
-    # avoid div0
+    # avoid division by zero
     if std_ret == 0:
         n_mean = 0.0
     else:
-        d = mean_ret / std_ret                 # Cohen's d
+        d = mean_ret / std_ret  # Cohen's d
         tpow = TTestPower()
         n_mean = tpow.solve_power(
             effect_size=abs(d),
@@ -49,10 +48,9 @@ def compute_sample_sizes():
         )
     # proportion test
     p0 = 0.5
-    p1 = (data > 0).mean()                    # empirical win-rate
-    h = proportion_effectsize(p1, p0)         # Cohen’s h
+    p1 = (data > 0).mean()  # empirical win-rate
+    h = proportion_effectsize(p1, p0)  # Cohen’s h
     pown = NormalIndPower()
-    # if p1==p0 => h==0 => solve_power returns inf
     n_prop = pown.solve_power(
         effect_size=abs(h),
         alpha=0.05,
@@ -66,16 +64,37 @@ def main_loop():
     while True:
         iteration += 1
         print(f"\n=== Iteration #{iteration} ===")
-        run_main()
-        n_mean, n_prop = compute_sample_sizes()
-        print(f"→ Required runs to detect mean≠0 (80% power): {n_mean:.1f}")
-        print(f"→ Required runs to detect win-rate>50% (80% power): {n_prop:.1f}")
-        # stop when both drop to (or below) 1 run
+        try:
+            run_main()
+        except subprocess.CalledProcessError as e:
+            print(f"[ERROR] main.py execution failed: {e}")
+            time.sleep(2)
+            continue
+
+        try:
+            n_mean, n_prop = compute_sample_sizes()
+            print(f"→ Required runs to detect mean≠0 (80% power): {n_mean:.1f}")
+            print(f"→ Required runs to detect win-rate>50% (80% power): {n_prop:.1f}")
+        except Exception as e:
+            print(f"[ERROR] Could not compute sample sizes: {e}")
+            # If there’s an issue (such as file-lock), wait and try again.
+            time.sleep(2)
+            continue
+
+        # stop when both sample-size requirements drop to (or below) 1 run
         if n_mean <= 1.0 and n_prop <= 1.0:
             print("\n✅ Both sample‐size requirements are ≤1; stopping loop.")
             break
-        # small pause to avoid file‐lock issues
+
+        # Short pause to avoid file-lock issues
         time.sleep(1)
 
 if __name__ == "__main__":
-    main_loop()
+    # Start the animated plot in a separate process.
+    anim_proc = subprocess.Popen(["python", str(Path(__file__).parent / "plot_animated_runs.py")])
+    
+    try:
+        main_loop()
+    finally:
+        # When main_loop() ends, terminate the animation process.
+        anim_proc.terminate()
